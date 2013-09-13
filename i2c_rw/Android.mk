@@ -1,7 +1,7 @@
 LOCAL_PATH:= $(call my-dir)
 include $(CLEAR_VARS)
 
-LOCAL_SRC_FILES:= i2c_rw.c
+LOCAL_SRC_FILES:= i2c_rw.cpp
 
 LOCAL_MODULE:= i2c_rw
 
