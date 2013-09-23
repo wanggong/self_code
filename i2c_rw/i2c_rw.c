@@ -222,7 +222,7 @@ int main(int argc , char** argv){
 //	slaveaddr = atoi(argv[4]);
 //	regaddr = atoi(argv[5]);
 
-	sscanf(argv[2] , "%d", &addr_width);
+//	sscanf(argv[2] , "%d", &addr_width);
 	addr_width = todig(argv[2]);
 	count = todig(argv[3]);
 	slaveaddr = todig(argv[4]);
@@ -238,7 +238,7 @@ int main(int argc , char** argv){
 		printf("ioctl(fd,I2C_TENBIT,0) error:%s\n" , strerror(errno));
 		goto ERROR;
 	}
-    res = ioctl(fd,I2C_SLAVE_FORCE,slaveaddr);    //set the address
+    res = ioctl(fd,I2C_SLAVE_FORCE,slaveaddr);    //设置I2C从设备地址[6:0]
     if(res < 0)
 	{
 		printf("ioctl(fd,I2C_SLAVE,%d) error:%s\n" , slaveaddr , strerror(errno));
@@ -273,7 +273,8 @@ int main(int argc , char** argv){
     else if (argc == 7)
 	{
             int writeto = 0;
-			sscanf(argv[6] , "%d", &writeto);
+			//sscanf(argv[6] , "%d", &writeto);
+			writeto = todig(argv[6]);
             res=iic_write(fd,(char*)&writeto,regaddr,count);
 			if(res < 0)
 			{
