@@ -17,6 +17,25 @@
 #include <linux/debugfs.h>
 #include <asm/uaccess.h>
 
+
+
+
+#include <linux/vmalloc.h>
+#include <linux/io.h>
+
+#include <asm/cp15.h>
+#include <asm/cputype.h>
+#include <asm/cacheflush.h>
+#include <asm/mmu_context.h>
+#include <asm/pgalloc.h>
+#include <asm/tlbflush.h>
+#include <asm/sizes.h>
+#include <asm/system_info.h>
+
+#include <asm/mach/map.h>
+
+
+
 static struct dentry *debug_mem_dir;
 static struct dentry *value_dentry;
 static struct dentry *address_entry;
@@ -50,56 +69,232 @@ static unsigned long phy_printmore = 1;
 
 
 
+#define ARM_FIRST_LEVEL_MASK 0x3
+#define ARM_FIRST_LEVEL_1M 0x2
+#define ARM_FIRST_LEVEL_1K_TABLE 0x1
+#define ARM_FIRST_LEVEL_4K_TABLE 0x3
+#define ARM_FIRST_LEVEL_NONE 0x0
+
+#define ARM_FIRST_1M_SHIFT 20
+#define ARM_FIRST_LEVEL_SHIFT 20
+
+#define ARM_SEC_LEVEL_MASK 0x3
+#define ARM_SEC_LEVEL_4K 0x2
+#define ARM_SEC_LEVEL_64K 0x1
+#define ARM_SEC_LEVEL_1K 0x3
+#define ARM_SEC_LEVEL_NONE 0x0
+
+#define pgd_addr(pgd , v_addr)((pgd&(~((1<<21)-1)))|(v_addr&((1<<21)-1)))
+
+
+#define arm_pgd_index(addr)		((addr) >> ARM_FIRST_LEVEL_SHIFT)
+#define arm_pgd_offset(mm, addr)	((mm)->pgd + pgd_index(addr))
+#define arm_pgd_offset_k(addr)	pgd_offset(&init_mm, addr)
+
+
+
+
+#define VM_ARM_SECTION_MAPPING	0x80000000
+#define VM_ARM_STATIC_MAPPING	0x40000000
+#define VM_ARM_EMPTY_MAPPING	0x20000000
+#define VM_ARM_MTYPE(mt)		((mt) << 20)
+#define VM_ARM_MTYPE_MASK	(0x1f << 20)
+#define VM_ARM_DMA_CONSISTENT	0x20000000
+
+struct mem_type {
+	pteval_t prot_pte;
+	pmdval_t prot_l1;
+	pmdval_t prot_sect;
+	unsigned int domain;
+};
+
+
+static void __iomem * mem_arm_ioremap_pfn_caller(unsigned long pfn,
+	unsigned long offset, size_t size, unsigned int mtype, void *caller)
+{
+	const struct mem_type *type;
+	int err;
+	unsigned long addr;
+ 	struct vm_struct * area;
+
+#ifndef CONFIG_ARM_LPAE
+	/*
+	 * High mappings must be supersection aligned
+	 */
+	if (pfn >= 0x100000 && (__pfn_to_phys(pfn) & ~SUPERSECTION_MASK))
+		return NULL;
+#endif
+
+	type = get_mem_type(mtype);
+	if (!type)
+		return NULL;
+
+	/*
+	 * Page align the mapping size, taking account of any offset.
+	 */
+	size = PAGE_ALIGN(offset + size);
+
+	/*
+	 * Try to reuse one of the static mapping whenever possible.
+	 */
+	read_lock(&vmlist_lock);
+	for (area = vmlist; area; area = area->next) {
+		if (!size || (sizeof(phys_addr_t) == 4 && pfn >= 0x100000))
+			break;
+		if (!(area->flags & VM_ARM_STATIC_MAPPING))
+			continue;
+		if ((area->flags & VM_ARM_MTYPE_MASK) != VM_ARM_MTYPE(mtype))
+			continue;
+		if (__phys_to_pfn(area->phys_addr) > pfn ||
+		    __pfn_to_phys(pfn) + size-1 > area->phys_addr + area->size-1)
+			continue;
+		/* we can drop the lock here as we know *area is static */
+		read_unlock(&vmlist_lock);
+		addr = (unsigned long)area->addr;
+		addr += __pfn_to_phys(pfn) - area->phys_addr;
+		return (void __iomem *) (offset + addr);
+	}
+	read_unlock(&vmlist_lock);
+
+	/*
+	 * Don't allow RAM to be mapped - this causes problems with ARMv6+
+	 */
+#if 0  //wgz remove
+	if (WARN_ON(pfn_valid(pfn)))
+		return NULL;
+#endif
+	area = get_vm_area_caller(size, VM_IOREMAP, caller);
+ 	if (!area)
+ 		return NULL;
+ 	addr = (unsigned long)area->addr;
+
+#if !defined(CONFIG_SMP) && !defined(CONFIG_ARM_LPAE)
+	if (DOMAIN_IO == 0 &&
+	    (((cpu_architecture() >= CPU_ARCH_ARMv6) && (get_cr() & CR_XP)) ||
+	       cpu_is_xsc3()) && pfn >= 0x100000 &&
+	       !((__pfn_to_phys(pfn) | size | addr) & ~SUPERSECTION_MASK)) {
+		area->flags |= VM_ARM_SECTION_MAPPING;
+		err = remap_area_supersections(addr, pfn, size, type);
+	} else if (!((__pfn_to_phys(pfn) | size | addr) & ~PMD_MASK)) {
+		area->flags |= VM_ARM_SECTION_MAPPING;
+		err = remap_area_sections(addr, pfn, size, type);
+	} else
+#endif
+		err = ioremap_page_range(addr, addr + size, __pfn_to_phys(pfn),
+					 __pgprot(type->prot_pte));
+
+	if (err) {
+ 		vunmap((void *)addr);
+ 		return NULL;
+ 	}
+
+	flush_cache_vmap(addr, addr + size);
+	return (void __iomem *) (offset + addr);
+}
+
+
+static void __iomem *mem_arm_ioremap_caller(phys_addr_t phys_addr, size_t size,
+	unsigned int mtype, void *caller)
+{
+	phys_addr_t last_addr;
+	phys_addr_t offset = phys_addr & ~PAGE_MASK;
+ 	unsigned long pfn = __phys_to_pfn(phys_addr);
+
+ 	/*
+ 	 * Don't allow wraparound or zero size
+	 */
+	last_addr = phys_addr + size - 1;
+	if (!size || last_addr < phys_addr)
+		return NULL;
+
+	return mem_arm_ioremap_pfn_caller(pfn, offset, size, mtype,caller);
+}
+
+
+
+static void __iomem *mem_arm_ioremap(phys_addr_t phys_addr, size_t size, unsigned int mtype)
+{
+	return mem_arm_ioremap_caller(phys_addr, size, mtype,
+		__builtin_return_address(0));
+}
+
+#define mem_io_remap(cookie,size)		mem_arm_ioremap((cookie), (size), MT_DEVICE)
+
+
+
+
+
 
 
 
 static int isaddressvalid(int write)
 {
 	pgd_t *pgd;
-	pud_t *pud;
-	pmd_t *pmd;
 	pte_t *pte;
 
-	printk("init_mm = %p , current->mm = %p taskid = %d\n" , &init_mm , current->mm , current->pid);
+	unsigned long l_pgd = 0 ; 
+	unsigned long l_pte = 0;
+
+	
 	if(!virt_addr_valid(address))
 	{
-		printk("address(0x%lx) is not valid\n" , address);
+		printk("address(0x%08lx) is not valid\n" , address);
 		//return 0;
 	}
 	pgd = pgd_offset_k(address);
-	if(pgd_none(*pgd))
+	l_pgd = (unsigned long )(*pgd)[0];
+	printk("init_mm = %p , current->mm = %p taskid = %d , pgd=0x%p , l_pgd=0x%08lx\n" , &init_mm , current->mm , current->pid , pgd , l_pgd);
+	if((l_pgd&ARM_FIRST_LEVEL_MASK) == ARM_FIRST_LEVEL_NONE)
 	{
-		printk("address(0x%lx) pgd is none\n" , address);
+		printk("address(0x%08lx) pgd = 0x%08lx , not matched\n" , address , l_pgd);
 		return 0;
 	}
-	pud = pud_offset(pgd, address);
-	if(pud_none(*pud))
+
+	else if((l_pgd&ARM_FIRST_LEVEL_MASK) == ARM_FIRST_LEVEL_4K_TABLE)
 	{
-		printk("address(0x%lx) pud is none\n" , address);
+		printk("address(0x%08lx) pgd = 0x%08lx , match 4k table , not support\n",address,l_pgd);
 		return 0;
 	}
-	pmd = pmd_offset(pud, address);
-	if (pmd_none(*pmd))
+	
+	else if((l_pgd&ARM_FIRST_LEVEL_MASK) == ARM_FIRST_LEVEL_1M)
 	{
-		printk("address(0x%lx) pmd is none\n" , address);
-		return 0;
-	}
-	pte = pte_offset_map(pmd, address);
-	if (pte_none(*pte)) 
-	{
-		printk("address(0x%lx) pte is none\n" , address);
-		return 0;
-	}
-	printk("pte = %08lx , pfn = %08lx , phy_addr = %08lx\n", (unsigned long)pte_val(*pte) ,pte_pfn(*pte), pte_pfn(*pte)<<PAGE_SHIFT);
-	if(!pte_present(*pte))
-	{
-		printk("address(0x%lx) page is not present\n" , address);
+		printk("arm 1M table \n");
+		printk("l_pgd= %08lx , vir_addr=%08lx , phy_addr = %08lx\n", l_pgd , address,(l_pgd&PGDIR_MASK)|(address&(PGDIR_SIZE-1)));
 		return 1;
 	}
-	if(write&&!pte_write(*pte))
+	
+	else //(l_pgd & ARM_FIRST_LEVEL_MASK == ARM_FIRST_LEVEL_1K_TABLE) only this
 	{
-		printk("address(0x%lx) is readonly\n" , address);
-		return 1;
+		printk("address(0x%08lx) pgd = 0x%08lx , match 1k table \n" , address , l_pgd);
+
+		pgd = pgd_offset_k(address);
+		pte = pte_offset_map((pmd_t*)pgd, address);
+		if (pte_none(*pte)) 
+		{
+			printk("address(0x%lx) pte is none\n" , address);
+			return 0;
+		}
+		printk("pte = %08lx , pfn = %08lx , phy_addr = %08lx\n", (unsigned long)pte_val(*pte) ,pte_pfn(*pte), pte_pfn(*pte)<<PAGE_SHIFT);
+
+		l_pte = (unsigned long)(*pte);
+		if((l_pte&ARM_SEC_LEVEL_MASK) == ARM_FIRST_LEVEL_NONE)
+		{
+			printk("page not present\n");
+		}
+		else if((l_pte&ARM_SEC_LEVEL_MASK) == ARM_SEC_LEVEL_64K)
+		{
+			printk("64k page , not support\n");
+		}
+		else if((l_pte&ARM_SEC_LEVEL_MASK) == ARM_SEC_LEVEL_1K)
+		{
+			printk("1k page , not support\n");
+		}
+
+		else //4k
+		{
+			printk("ok 4k page\n");
+			return 1;
+		}
 	}
 	
 	return 1;
@@ -110,18 +305,14 @@ static int isaddressvalid(int write)
 static int printptetablefunc(void *data, u64 *val)
 {
 	pgd_t *pgd;
-	pud_t *pud;
-	pmd_t *pmd;
 	pte_t *pte;
 	int mpgd_index = 0;
-	int mpud_index = 0;
-	int mpmd_index = 0;
 	int mpte_index = 0;
 	int mpgd_count = 0; 
-	int mpud_count = 0;
-	int mpmd_count = 0;
 	int mpte_count = 0; 
 	unsigned long m_address = 0;
+
+	unsigned long l_pgd = 0;
 
 	mpgd_count = pgd_index(0xFFFFFFFF); 
 	printk(KERN_EMERG"mpgd_count = %d\n" , mpgd_count);
@@ -135,110 +326,40 @@ static int printptetablefunc(void *data, u64 *val)
 	{
 		m_address = PGDIR_SIZE*mpgd_index;
 		pgd = pgd_offset_k(m_address);
+		l_pgd = (*pgd)[0];
 		if(pgd_none(*pgd))
 		{
 			//printk(KERN_EMERG"#%08lx pgd is none\n" , m_address);
 			continue;
 		}
-		mpud_count = PGDIR_SIZE/PUD_SIZE;
-		//printk(KERN_EMERG"mpud_count = %d\n" , mpud_count);
-		for(mpud_index = 0 ; mpud_index < mpud_count ; ++mpud_index)
+		else if((l_pgd&ARM_FIRST_LEVEL_MASK) == ARM_FIRST_LEVEL_1M)
 		{
-			m_address = PGDIR_SIZE*mpgd_index+mpud_index*PUD_SIZE;
-			pud = pud_offset(pgd, m_address);
-			if(pud_none(*pud))
-			{
-				//printk(KERN_EMERG"#%08lx pud is none\n" , m_address);
-				continue;
-			}
-			mpmd_count = PUD_SIZE/PMD_SIZE;
-			//printk(KERN_EMERG"mpmd_count = %d\n" , mpmd_count);
-			for(mpmd_index = 0 ; mpmd_index < mpmd_count ; ++mpmd_index)
-			{
-				m_address = PGDIR_SIZE*mpgd_index+mpud_index*PUD_SIZE+PMD_SIZE*mpmd_index;
-				//printk(KERN_EMERG"#%08lx befire\n" , m_address);
-				pmd = pmd_offset(pud, m_address);
-				//printk(KERN_EMERG"#%08lx after\n" , m_address);
-				if (pmd_none(*pmd))
-				{
-					//printk(KERN_EMERG"#%08lx pmd is none\n" , m_address);
-					continue;
-				}
-				mpte_count = PMD_SIZE/PAGE_SIZE;
-				//printk(KERN_EMERG"mpte_count = %d\n" , mpte_count);
-				printk("pmd = %lx ,mpgd_index=%d , m_address=%lx\n", (unsigned long)pmd_val(*pmd) , mpgd_index , m_address);
-				for(mpte_index = 0 ; mpte_index < mpte_count ; ++mpte_index)
-				{
-					m_address = PGDIR_SIZE*mpgd_index+mpud_index*PUD_SIZE+PMD_SIZE*mpmd_index+mpte_index*PAGE_SIZE;
-					//printk(KERN_EMERG"#%08lx pte befire pmd=%p\n" , m_address , pmd);
-					pte = pte_offset_map(pmd, m_address);
-					//printk(KERN_EMERG"#%08lx pte=%p\n" , m_address,pte);
-					if(mpte_index % 16 == 0)
-					{
-						printk("\n"); 
-					}
-					printk(" %08lx-", (unsigned long)pte_val(*pte));
-					
-					if (pte_none(*pte)) 
-					{
-						//printk(KERN_EMERG"#%08lx pte is none\n" , m_address);
-						printk("NNNNN");
-						continue;
-					}
-					//printk(KERN_EMERG"#%08lx after pte=%p\n" , m_address,pte);
-					if(!pte_present(*pte))
-					{
-						//printk(KERN_EMERG"#%08lx pte is not present\n" , m_address);
-						printk("P");
-						//continue;
-					}
-					else
-					{
-						printk("N");
-					}
-					//printk(KERN_EMERG"#%08lx after pte_present pte=%p\n" , m_address,pte);
-					if(pte_write(*pte))
-					{
-						//printk(KERN_EMERG"#%08lx\n" , m_address);
-						//continue;
-						printk("W");
-					}
-					else
-					{
-						printk("R");
-					}
-					if(pte_dirty(*pte))
-					{
-						printk("D");
-					}
-					else
-					{
-						printk("C");
-					}
-					if(pte_young(*pte))
-					{
-						printk("Y");
-					}
-					else
-					{
-						printk("O");
-					}
-					if(pte_exec(*pte))
-					{
-						printk("E");
-					}
-					else
-					{
-						printk("D");
-					}
-					pte_unmap(*pte);
-					//printk(KERN_EMERG"#%08lx after pte_write pte=%p\n" , m_address,pte);
-					//printk(KERN_EMERG"@%08lx\n" , m_address);  
-				}
-				printk("\n");
-			}
-			
+			printk(" %08lx-1M ", (unsigned long)(*pgd)[0]);
+			printk(" %08lx-1M ", (unsigned long)(*pgd)[1]);
+			printk("\n");
 		}
+
+		else if((l_pgd&ARM_FIRST_LEVEL_MASK) == ARM_FIRST_LEVEL_1K_TABLE)
+		{
+			mpte_count = PMD_SIZE/PAGE_SIZE;
+			printk("\n pmd = 0x%lx ,mpgd_index=%d , m_address=0x%lx\n", (unsigned long)pgd_val(*pgd) , mpgd_index , m_address);
+			for(mpte_index = 0 ; mpte_index < mpte_count ; ++mpte_index)
+			{
+				m_address = PGDIR_SIZE*mpgd_index+mpte_index*PAGE_SIZE;
+				pte = pte_offset_map((pmd_t*)pgd, m_address);
+				if(mpte_index % 16 == 0)
+				{
+					printk("\n"); 
+				}
+				if(mpte_index % 1024 == 0)
+				{
+					printk("\n"); 
+				}
+				printk(" %08lx", (unsigned long)pte_val(*pte));
+				pte_unmap(*pte);
+			}			
+		}
+	
 	}
 	
 	return 0;
@@ -277,7 +398,11 @@ static int printmemsfunc(void *data, u64 *val)
 	addr = address;
 	for(index =0; index < count;++index)
 	{
-		if(addr % 512 == 0)
+		if(addr % 1024 == 0)
+		{
+			printk("\n");
+		}
+		if(addr % 4096 == 0)
 		{
 			printk("\n");
 		}
@@ -295,154 +420,64 @@ static int vir_2_phy_func(void *data, u64 val)
 {
 	address = val;
 	isaddressvalid(1);
+				
 	return 0;
 }
 
 static int phy_2_vir_func(void *data, u64 val)
 {
-	unsigned long phy_addr = val;
 	pgd_t *pgd;
-	pud_t *pud;
-	pmd_t *pmd;
 	pte_t *pte;
 	int mpgd_index = 0;
-	int mpud_index = 0;
-	int mpmd_index = 0;
 	int mpte_index = 0;
 	int mpgd_count = 0; 
-	int mpud_count = 0;
-	int mpmd_count = 0;
 	int mpte_count = 0; 
 	unsigned long m_address = 0;
+	unsigned long m_phy_address = val;
+
+	unsigned long l_pgd = 0;
 
 	mpgd_count = pgd_index(0xFFFFFFFF); 
 	for(mpgd_index = 0 ; mpgd_index <= mpgd_count ; ++mpgd_index)
 	{
 		m_address = PGDIR_SIZE*mpgd_index;
 		pgd = pgd_offset_k(m_address);
-	}
-	for(mpgd_index = 0 ; mpgd_index <= mpgd_count ; ++mpgd_index)
-	{
-		m_address = PGDIR_SIZE*mpgd_index;
-		pgd = pgd_offset_k(m_address);
+		l_pgd = (*pgd)[0];
 		if(pgd_none(*pgd))
 		{
-			//printk(KERN_EMERG"#%08lx pgd is none\n" , m_address);
 			continue;
 		}
-		mpud_count = PGDIR_SIZE/PUD_SIZE;
-		//printk(KERN_EMERG"mpud_count = %d\n" , mpud_count);
-		for(mpud_index = 0 ; mpud_index < mpud_count ; ++mpud_index)
+		else if((l_pgd&ARM_FIRST_LEVEL_MASK) == ARM_FIRST_LEVEL_1M)
 		{
-			m_address = PGDIR_SIZE*mpgd_index+mpud_index*PUD_SIZE;
-			pud = pud_offset(pgd, m_address);
-			if(pud_none(*pud))
+			if(l_pgd>>PGDIR_SHIFT== m_phy_address >> PGDIR_SHIFT)
 			{
-				//printk(KERN_EMERG"#%08lx pud is none\n" , m_address);
-				continue;
-			}
-			mpmd_count = PUD_SIZE/PMD_SIZE;
-			//printk(KERN_EMERG"mpmd_count = %d\n" , mpmd_count);
-			for(mpmd_index = 0 ; mpmd_index < mpmd_count ; ++mpmd_index)
-			{
-				m_address = PGDIR_SIZE*mpgd_index+mpud_index*PUD_SIZE+PMD_SIZE*mpmd_index;
-				//printk(KERN_EMERG"#%08lx befire\n" , m_address);
-				pmd = pmd_offset(pud, m_address);
-				//printk(KERN_EMERG"#%08lx after\n" , m_address);
-				if (pmd_none(*pmd))
-				{
-					//printk(KERN_EMERG"#%08lx pmd is none\n" , m_address);
-					continue;
-				}
-				mpte_count = PMD_SIZE/PAGE_SIZE;
-				//printk(KERN_EMERG"mpte_count = %d\n" , mpte_count);
-				//printk("pmd = %lx ,mpgd_index=%d , m_address=%lx\n", (unsigned long)pmd_val(*pmd) , mpgd_index , m_address);
-				for(mpte_index = 0 ; mpte_index < mpte_count ; ++mpte_index)
-				{
-					m_address = PGDIR_SIZE*mpgd_index+mpud_index*PUD_SIZE+PMD_SIZE*mpmd_index+mpte_index*PAGE_SIZE;
-					//printk(KERN_EMERG"#%08lx pte befire pmd=%p\n" , m_address , pmd);
-					pte = pte_offset_map(pmd, m_address);
-					//printk(KERN_EMERG"#%08lx pte=%p\n" , m_address,pte);
-					
-					if (pte_none(*pte)) 
-					{
-						//printk(KERN_EMERG"#%08lx pte is none\n" , m_address);
-						pte_unmap(*pte);
-						continue;
-					}
-
-					if(pte_pfn(*pte) == phy_addr >> PAGE_SHIFT)
-					{
-						printk("\n");
-						printk("vir_addr = %08lx ,phy_addr = %08lx ,pte=%08lx  " , m_address|(phy_addr&(PAGE_SIZE-1)) , phy_addr ,(unsigned long)pte_val(*pte));
-						
-						if(pte_present(*pte))
-						{
-							//printk(KERN_EMERG"#%08lx pte is not present\n" , m_address);
-							printk("P");
-							//continue;
-						}
-						else
-						{
-							if(pte_file(*pte))
-							{
-								printk("F");
-							}
-							else
-							{
-								printk("N");
-							}
-						}
-						//printk(KERN_EMERG"#%08lx after pte_present pte=%p\n" , m_address,pte);
-						if(pte_write(*pte))
-						{
-							//printk(KERN_EMERG"#%08lx\n" , m_address);
-							//continue;
-							printk("W");
-						}
-						else
-						{
-							printk("R");
-						}
-						if(pte_dirty(*pte))
-						{
-							printk("D");
-						}
-						else
-						{
-							printk("C");
-						}
-						if(pte_young(*pte))
-						{
-							printk("Y");
-						}
-						else
-						{
-							printk("O");
-						}
-						if(pte_exec(*pte))
-						{
-							printk("E");
-						}
-						else
-						{
-							printk("D");
-						}
-						printk("\n");
-					}
-					pte_unmap(*pte);
-					//printk(KERN_EMERG"#%08lx after pte_write pte=%p\n" , m_address,pte);
-					//printk(KERN_EMERG"@%08lx\n" , m_address);  
-				}
-				//printk("\n");
-			}
-			
+				printk("\n");
+				printk("vir_addr = %08lx ,phy_addr = %08lx ,l_pgd=%08lx  " , m_address|(m_phy_address&(PGDIR_SIZE-1)) , m_phy_address ,l_pgd);
+			}	
 		}
+
+		else if((l_pgd&ARM_FIRST_LEVEL_MASK) == ARM_FIRST_LEVEL_1K_TABLE)
+		{
+			mpte_count = PMD_SIZE/PAGE_SIZE;
+			//printk("\n pmd = 0x%lx ,mpgd_index=%d , m_address=0x%lx\n", (unsigned long)pgd_val(*pgd) , mpgd_index , m_address);
+			for(mpte_index = 0 ; mpte_index < mpte_count ; ++mpte_index)
+			{
+				m_address = PGDIR_SIZE*mpgd_index+mpte_index*PAGE_SIZE;
+				pte = pte_offset_map((pmd_t*)pgd, m_address);
+				if(pte_pfn(*pte) == m_phy_address >> PAGE_SHIFT && pte_present(*pte))
+				{
+					printk("\n");
+					printk("vir_addr = %08lx ,phy_addr = %08lx ,pte=%08lx  " , m_address|(m_phy_address&(PAGE_SIZE-1)) , m_phy_address ,(unsigned long)pte_val(*pte));
+				}
+				pte_unmap(*pte);
+			}			
+		}
+	
 	}
 	
-	return 0;	
 	return 0;
 }
+
 
 
 void __iomem * remap_io_or_mem(phys_addr_t phy_addr_temp, unsigned long size)
@@ -452,12 +487,12 @@ void __iomem * remap_io_or_mem(phys_addr_t phy_addr_temp, unsigned long size)
 	if(pfn_valid(__phys_to_pfn(phy_addr_temp)))
 	{
 		printk("map emeory area\n");
-		vir_address = ioremap((phys_addr_t)phy_addr_temp , count);
+		vir_address = mem_io_remap((phys_addr_t)phy_addr_temp , count);
 	}
 	else
 	{
 		printk("map io area\n");
-		vir_address = ioremap((phys_addr_t)phy_addr_temp , count);
+		vir_address = mem_io_remap((phys_addr_t)phy_addr_temp , count);
 	}
 	if(vir_address == 0)
 	{
