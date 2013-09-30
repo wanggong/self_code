@@ -1,1 +1,0 @@
-obj-m		+= debug.o
