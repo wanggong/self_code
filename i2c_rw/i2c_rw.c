@@ -275,7 +275,7 @@ int main(int argc , char** argv){
 		printf("ioctl(fd,I2C_TENBIT,0) error:%s\n" , strerror(errno));
 		goto ERROR;
 	}
-    res = ioctl(fd,I2C_SLAVE_FORCE,slaveaddr);    //设置I2C从设备地址[6:0]
+    res = ioctl(fd,I2C_SLAVE_FORCE,slaveaddr);    
     if(res < 0)
 	{
 		printf("ioctl(fd,I2C_SLAVE,%d) error:%s\n" , slaveaddr , strerror(errno));
