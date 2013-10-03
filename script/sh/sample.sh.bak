@@ -47,10 +47,10 @@ while_function()
 	do
 		if(($index<5))
 		then
-			echo wang
-			index=$index+1;
+		echo wang
+		index=$index+1;
 		else
-			break;
+		break;
 		fi
 	done
 }
