@@ -21,6 +21,7 @@ channel=0;
 read_data0=0;
 read_data1=0;
 read_data2=0;
+command_will_send=0;
 
 # first parameter is the command
 function set_phy_address()
@@ -58,28 +59,31 @@ function read_data()
 	read_data2=`cat $phy_value_path`;
 }
 
-function read_onebyte_register()
+#$1 0 for write 1 for read
+#$2 sid charging is 0 , ldo is 2
+#$3 address
+#$4 count
+function composite_and_write_command()
 {
-	let opcode=0x01\<\<27;
-	let sid=0\<\<20;
-	let addr=$1\<\<4;
-	let read_count=1-1;
-	let send_cmd=$opcode\|$sid\|$addr\|$read_count;
-	write_command $send_cmd;
+	let opcode=$1\<\<27;
+	let sid=$2\<\<20;
+	let addr=$3\<\<4;
+	let read_count=$4-1;
+	let command_will_send=$opcode\|$sid\|$addr\|$read_count;
+	write_command $command_will_send;
+}
+
+function pmic_read1()
+{
+	composite_and_write_command 0x01 0x0 $1 0x1;
 	read_data;
 	echo $read_data0;
 }
 
-function write_onebyte_register()
+function pmic_write1()
 {
-	let opcode=0x00\<\<27;
-	let sid=0\<\<20;
-	let addr=$1\<\<4;
-	let read_count=1-1;
-	let send_cmd=$opcode\|$sid\|$addr\|$read_count;
 	write_data0 $2;
-	write_command $send_cmd;
-	read_data;
+	composite_and_write_command 0x0 0x0 $1 0x1;
 }
 
 
@@ -100,7 +104,7 @@ function print_regs()
 		if(($index<$2))
 		then
 			let addr=$1+$index;
-			read_onebyte_register $addr;
+			pmic_read1 $addr;
 			let array_index=$index%16;
 			array_value[$array_index]=$read_data0;
 			if((array_index==15))
@@ -131,11 +135,71 @@ function read_all_charger_reg()
 }
 
 
+let LDO_BASE_START=0x14000;
+ONE_LDO_REGS=0x100;
+ENABLE_REG_ADDR=0x46;
+MODE_REG_ADDR=0x45;
+function ldo_enable()
+{
+	let ldo_index=$1-1;
+	let ldo_reg_addr=$LDO_BASE_START+$ldo_index*0x100+$ENABLE_REG_ADDR;
+	pmic_read1 $ldo_reg_addr;
+	if (($#>1))
+	then
+	pmic_write1 $ldo_reg_addr $2;
+	pmic_read1 $ldo_reg_addr;
+	fi
+}
+
+function ldo_mode()
+{
+	let ldo_index=$1-1;
+	let ldo_reg_addr=$LDO_BASE_START+$ldo_index*0x100+$MODE_REG_ADDR;
+	pmic_read1 $ldo_reg_addr;
+	if (($#>1))
+	then
+	pmic_write1 $ldo_reg_addr $2;
+	pmic_read1 $ldo_reg_addr;
+	fi
+}
+
+function ldo_status()
+{
+	let ldo_index=$1-1;
+	let ldo_reg_addr=$LDO_BASE_START+$ldo_index*0x100+$MODE_REG_ADDR;
+	pmic_read1 $ldo_reg_addr;
+	echo "ldo_$1_mode:$read_data0";
+	let ldo_reg_addr=$LDO_BASE_START+$ldo_index*0x100+$ENABLE_REG_ADDR;
+	pmic_read1 $ldo_reg_addr;
+	echo "ldo_$1_enable:$read_data0";
+}
+
+function ldo_status_all()
+{
+	local index=1;
+	while [ 1 ]
+	do
+		if(($index<=22))
+		then
+			ldo_status $index
+		else
+			break;
+		fi
+		let index=$index+1;
+	done
+}
+
+
 function help_pmic()
 {
-	echo "read_onebyte_register (reg_addr)to read one register";
-	echo "write_onebyte_register (reg_addr value) write one reg";
+	echo "pmic_read1 (reg_addr)to read one register";
+	echo "pmic_write1 (reg_addr value) write one reg";
+	echo "ldo_enable (reg_addr -value) read or write ldo enable reg";
+	echo "ldo_mode (reg_addr -value) read or write ldo mode reg";
+	echo "ldo_status_all print all ldo status";
 }
+
+help_pmic;
 
 
 
