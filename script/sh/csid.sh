@@ -8,6 +8,7 @@ csid1_base=0xfda00000;
 csid2_base=0xfda00400;
 csid_reg_length=0xd8;
 
+
 function set_csid_addr()
 {
 	
@@ -76,6 +77,33 @@ function print_csid
 	print_csid_all $1;
 }
 
+function io_value()
+{
+	echo $1 > $phy_addr_path;
+	if(($#<2))
+	then
+		phy_value=`cat $phy_value_path`;
+		echo $phy_value;
+	else
+		echo $2 > $phy_value_path;
+	fi
+}
+
+CSID0_ECC_STAT_BASE=0xfda00090;
+CSID0_CRC_STAT_BASE=0xfda00094;
+function csid_ecc_crc()
+{
+	if(($#==1))
+	then
+	let ecc_stat_addr=$CSID0_ECC_STAT_BASE+$1*0x400;
+	echo "ECC :";
+	io_value $ecc_stat_addr;
+	let crc_stat_addr=$CSID0_CRC_STAT_BASE+$1*0x400;
+	echo "CRC :"
+	io_value $crc_stat_addr;
+	fi
+}
+
 
 function help_csid()
 {
@@ -83,18 +111,11 @@ function help_csid()
 	echo "set_csid_irq_mask to set irq mask";
 	echo "print_csid_mem to print all register";
 	echo "print_csid to print all";
-	echo "print_ispif_mem print all ispif register"
+	echo "io_value read or write io value directly"
+	echo "csid_ecc_crc (csid) to read the ecc and crc stat";
 }
 
 
-isp_if_base_addr=0xFDA00800;
-isp_if_reg_length=0x200
-function print_ispif_mem()
-{
-	echo $isp_if_base_addr > $phy_addr_path;
-	echo $isp_if_reg_length > $count_path;
-	cat $phy_printmems;
-}
 
 
 help_csid;

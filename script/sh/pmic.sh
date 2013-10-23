@@ -86,6 +86,16 @@ function pmic_write1()
 	composite_and_write_command 0x0 0x0 $1 0x1;
 }
 
+function pmic_reg()
+{
+	if (($#>1))
+	then
+	pmic_write1 $1 $2
+	else
+	pmic_read1 $1
+	fi
+}
+
 
 CHGR_ADDRESS=0x1000;
 BUCK_ADDRESS=0x1100;
@@ -192,8 +202,7 @@ function ldo_status_all()
 
 function help_pmic()
 {
-	echo "pmic_read1 (reg_addr)to read one register";
-	echo "pmic_write1 (reg_addr value) write one reg";
+	echo "pmic_reg (reg_addr -value) read or write pmic reg";
 	echo "ldo_enable (reg_addr -value) read or write ldo enable reg";
 	echo "ldo_mode (reg_addr -value) read or write ldo mode reg";
 	echo "ldo_status_all print all ldo status";

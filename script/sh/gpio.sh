@@ -38,6 +38,7 @@ function get_gpio_cfg()
 	gpio_value=`cat $phy_value_path`;echo "gpio_value : $gpio_value";
 	let hihys_en=gpio_value\>\>10\&0x1;echo "hihys_en : $hihys_en";
 	let gpio_oe=gpio_value\>\>9\&0x1;echo "gpio_oe : $gpio_oe";
+	let gpio_drv_strengh=gpio_value\>\>6\&0x7;echo "gpio_drv_strengh : $gpio_drv_strengh";
 	let func=gpio_value\>\>2\&0xf;echo "func : $func";
 	let gpio_pull=gpio_value\>\>0\&0x3;echo "gpio_pull : $gpio_pull";
 }
@@ -63,6 +64,7 @@ function set_gpio_value()
 	echo "gpio_out_value : $2";
 	echo $2 > $phy_value_path;
 }
+
 
 function get_gpio_intr()
 {
@@ -90,16 +92,41 @@ function get_gpio_intr_status()
 }
 
 
+function gpio_value()
+{
+	if(($#<2))
+	then
+		get_gpio_value $1;
+	else
+		set_gpio_value $1 $2;
+	fi
+}
+
+function gpio_cfg()
+{
+	if(($#<2))
+	then
+		get_gpio_cfg $1;
+	else
+		set_gpio_cfg $1 $2;
+	fi
+}
+
+function gpio_intr()
+{
+	if(($#<2))
+	then
+		get_gpio_intr $1;
+	else
+		set_gpio_intr $1 $2;
+	fi
+}
+
 function gpio_help()
 {
-	echo "mkdir -p /data/debugfs;"
-	echo "mount -t debugfs nodev /data/debugfs;"
-	echo "then";
-	echo "get_gpio_cfg gpio_num to get the config of the gpio";
-	echo "set_gpio_cfg gpio_num gpio_cfg to set the config of the gpio";
-	echo "get_gpio_value gpio_num to get the value of the gpio";
-	echo "set_gpio_value gpio_num gpio_value to set the value of the gpio";
-	echo "get_gpio_intr gpio_num to get the config of gpio interrupt";
-	echo "set_gpio_intr gpio_num gpio_intr_value to set the gpio interrupt config value";
+	echo "gpio_cfg (gpio_num -gpio_cfg) to get or set the config of the gpio";
+	echo "gpio_value (gpio_num -gpio_value) to get or set the value of the gpio";
+	echo "gpio_intr (gpio_num -gpio_intr_value) to get or set the gpio interrupt config value";
 	echo "get_gpio_intr_status gpio_num to get the gpio interrupt status value";
 }
+gpio_help;

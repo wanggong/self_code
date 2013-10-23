@@ -50,6 +50,12 @@ static struct dentry *phy_value_entry;
 static struct dentry *phy_printmore_entry;
 
 
+static struct dentry *task_struct_dir;
+static struct dentry *pid_entry;
+static struct dentry *task_struct_addr_entry;
+
+
+
 
 
 
@@ -65,6 +71,10 @@ static unsigned long phy_2_vir = 1;
 static unsigned long phy_addr = 0x20000;
 static unsigned long phy_value = 0;
 static unsigned long phy_printmore = 1;
+
+static unsigned long pid = 0;
+static unsigned long task_struct_addr = 0;
+
 
 
 
@@ -593,6 +603,21 @@ static int phy_printmemsfunc(void *data, u64 *val)
 }
 
 
+static int task_struct_addr_get_func(void *data, u64 *val)
+{
+	struct task_struct *task = pid ? find_task_by_vpid(pid) : current;
+	if(task == 0)
+	{
+		printk(KERN_EMERG"can not find pid=%ld\n" , pid) ;
+		return 0;
+	}
+	printk(KERN_EMERG"pid = %d\n" , task->pid) ;
+	printk(KERN_EMERG"task = %p\n" , task) ;
+	printk(KERN_EMERG"real_cred = %p\n" , task->real_cred) ;
+	printk(KERN_EMERG"cred = %p\n" , task->cred) ;
+	*val = (u32)task;
+	return 0;
+}
 
 
 
@@ -604,6 +629,8 @@ DEFINE_SIMPLE_ATTRIBUTE(fops_vir_2_phy, 0, vir_2_phy_func, "0x%08llx\n");
 DEFINE_SIMPLE_ATTRIBUTE(fops_phy_2_vir, 0, phy_2_vir_func, "0x%08llx\n");
 DEFINE_SIMPLE_ATTRIBUTE(fops_phy_value, phy_value_get_func, phy_value_set_func, "0x%08llx\n");
 DEFINE_SIMPLE_ATTRIBUTE(fops_phy_printmems, phy_printmemsfunc, 0, "0x%08llx\n");
+DEFINE_SIMPLE_ATTRIBUTE(fops_task_struct_addr, task_struct_addr_get_func, 0, "0x%08llx\n");
+
 
 
 
@@ -628,6 +655,14 @@ static void init_debug_memfs(void)
 	phy_printmore_entry = debugfs_create_file("phy_printmems", 0777,debug_mem_dir, &phy_printmore,&fops_phy_printmems);
 }
 
+static void init_task_structfs(void)
+{
+	
+	task_struct_dir = debugfs_create_dir("task_struct", debug_mem_dir);
+	pid_entry = debugfs_create_x32("pid", S_IRWXUGO, task_struct_dir,(u32 *)&pid);
+	task_struct_addr_entry = debugfs_create_file("task_struct_addr", 0777,task_struct_dir, &task_struct_addr,&fops_task_struct_addr);
+}
+
 static void remove_debug_memfs(void)
 {
 	debugfs_remove(value_dentry);
@@ -644,18 +679,29 @@ static void remove_debug_memfs(void)
 	debugfs_remove(debug_mem_dir);
 }
 
+static void remove_task_structfs(void)
+{
+	debugfs_remove(task_struct_addr_entry);
+	debugfs_remove(pid_entry);
+	debugfs_remove(task_struct_dir);
+}
+
+
 
 static int __init debug_init(void)
 {
 
 	init_debug_memfs();
+	init_task_structfs();
 	return 0;
 }
 
 static void __exit debug_exit(void)
 {
 	pr_info("remove\n");
+	remove_task_structfs();
 	remove_debug_memfs();
+	
 }
 
 module_init(debug_init);
