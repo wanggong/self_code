@@ -429,6 +429,7 @@ static int printmemsfunc(void *data, u64 *val)
 		if(addr %16 == 0)
 		{
 			printk("\n");
+			printk("%08x: " , (u32)addr);
 		}
 		printk("%08x " , *(u32 *)addr);
 		addr += 4;
