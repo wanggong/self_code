@@ -54,3 +54,103 @@ while_function()
 		fi
 	done
 }
+
+#array test
+#${#array[*]} is the length of array
+#${new_array[0]} is the array item 0
+#${new_array[*] is the all array items 
+
+array_usage()
+{
+  local new_array;
+  new_array=(1 2 3 4 5 6 7);
+  echo "original array is ${new_array[*]}";
+  echo "length: ${#new_array[*]}";
+  new_array[0]=90;
+  echo ${new_array[0]};
+  echo ${new_array[1]};
+  echo ${new_array[2]};
+  echo ${new_array[3]};
+}
+
+#array parameters
+array_parameter_usege()
+{
+	local new_array;
+	new_array=(`echo "$@"`)
+  local array_len=${#new_array[*]}
+  echo "total num is $array_len"
+  echo ${new_array[0]}
+  echo ${new_array[1]}
+  echo ${new_array[2]}
+}
+array_parameter_usege_test()
+{
+	array1=(1 2 3 4 5);
+	array_parameter_usege ${array1[*]}	
+}
+
+#${var/a/b} will use b replace a in var
+#${var//a/b} will use b replace all a in var
+string_replace_usege()
+{
+	local name=wanggongzhenwanggongzhenwanggongzhen;
+	local rname1=${name/wang/abcd};
+	echo $name;
+	echo $rname1;
+	local rname2=${name//wang/abcd};
+	echo $name;
+	echo $rname2;
+	
+}
+
+
+
+new_array1=(
+ {0x1e,0x13},
+ {0x21,0x10},
+ {0x15,0x16},
+ {0x71,0x18},   
+ {0x7c,0x18},  
+ {0x76,0x19},
+ )
+
+
+address_start=0;
+array_value_set()
+{
+	local new_array;
+	new_array=(`echo "$@"`)
+  local array_len=${#new_array[*]}
+  echo "total num is $array_len"
+  echo "start_address:$address_start"
+  local index=0;
+  
+	while [ 1 ]
+	do
+		if(($index<$array_len))
+		then
+			local temp1=${new_array[$index]}
+			temp1=${temp1/,/};
+			index=$index+1;
+			local temp2=${new_array[$index]}
+			temp2=${temp2/,/};
+			index=$index+1;
+			echo $temp1;
+			echo $temp2;
+			let result=$temp1\<\<16\|$temp2;
+			echo $result;
+			
+			
+		else
+			break;
+		fi
+	done
+}
+
+address_start=0x123456;
+array_value_set ${new_array1[*]}
+
+
+ 
+ 
