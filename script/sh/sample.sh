@@ -12,12 +12,19 @@ function func_usage()
 # $# is the count of the parameters , 
 function func_param_test
 {
-	echo "parameter count is $#" ;
-#	for((i=0;$i<$#;i++))
-	{
-		eval b=\$$i;	
-		echo $b;
-	}
+	echo "long write length is $#";
+	let index=1;
+	while [ 1 ]
+	do
+		if(($index<=$#))
+		then
+			parameter=$(eval echo \$$index);
+			echo "parameter:$parameter"
+			let index=$index+1;
+		else
+			break;
+		fi
+	done
 }
 function func_param_usage()
 {
@@ -26,7 +33,7 @@ function func_param_usage()
 
 #input parameters , use $1,$2 ,...... to get it
 #echo $1;
-#echo $2l
+#echo $2;
 #echo $3;
 
 function if_else_then()
