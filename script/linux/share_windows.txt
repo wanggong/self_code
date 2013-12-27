@@ -1,0 +1,1 @@
+sudo mount -t cifs //sanqishare2/wangqin win -o username=LONGCHEER/wangqin2,password=xxxx,rw,uid=wangqin,gid=wangqin,unmask=000,dir_mod=0777 
