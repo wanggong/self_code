@@ -173,17 +173,4 @@ else
 echo "equal"
 fi
 }
-
-function str_cmp2()
-{
-#md5sum="f08f5aa6106b1f348b9feed2ef299a25 /system/bin/sh"
-if [[ $md5sum != f08f5aa6106b1f348b9feed2ef299a25* ]]
-then
-echo "not equal" 
-echo $md5sum
-echo $raw
-else
-echo "equal"
-fi
-}
  

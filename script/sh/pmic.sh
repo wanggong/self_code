@@ -96,6 +96,14 @@ function pmic_reg()
 	fi
 }
 
+function battery_only()
+{
+	echo 0 > /sys/class/power_supply/battery/charging_enabled;
+	pmic_reg 0x1049 1;
+	echo 'file qpnp-adc-common.c +p' > /data/debugfs/dynamic_debug/control
+}
+
+
 
 CHGR_ADDRESS=0x1000;
 BUCK_ADDRESS=0x1100;
@@ -206,6 +214,7 @@ function help_pmic()
 	echo "ldo_enable (reg_addr -value) read or write ldo enable reg";
 	echo "ldo_mode (reg_addr -value) read or write ldo mode reg";
 	echo "ldo_status_all print all ldo status";
+	echo " battery_only set battery only , not use usb power";
 }
 
 help_pmic;

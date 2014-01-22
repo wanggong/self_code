@@ -1,1 +1,1 @@
-obj-m	+= debug_mem.o
+obj-y	+= debug_mem.o
