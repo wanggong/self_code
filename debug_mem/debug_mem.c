@@ -31,9 +31,11 @@
 #include <asm/tlbflush.h>
 #include <asm/sizes.h>
 #include <asm/system_info.h>
+#include <linux/delay.h>
+
 
 #include <asm/mach/map.h>
-
+#define SUSPEND_RESUME_DEBUG
 
 
 static struct dentry *debug_mem_dir;
@@ -62,8 +64,9 @@ static struct dentry *cpu_id_crn_entry;
 static struct dentry *cpu_id_crm_entry;
 static struct dentry *cpu_id_mrc_mcr_entry;
 
+#ifdef SUSPEND_RESUME_DEBUG
 static struct dentry *suspend_resume_addr_entry;
-
+#endif
 
 
 
@@ -92,8 +95,9 @@ static unsigned long phy_2_vir = 1;
 static unsigned long phy_addr = 0x20000;
 static unsigned long phy_value = 0;
 static unsigned long phy_printmore = 1;
+#ifdef SUSPEND_RESUME_DEBUG
 static unsigned long suspend_resume_addr= 0;
-
+#endif
 
 static unsigned long pid = 0;
 static unsigned long task_struct_addr = 0;
@@ -638,7 +642,7 @@ void __iomem * remap_io_or_mem(phys_addr_t phy_addr_temp, unsigned long size)
 	else
 	{
 		printk("map io area\n");
-		vir_address = ioremap((phys_addr_t)phy_addr_temp , count); 
+		vir_address = ioremap((phys_addr_t)phy_addr_temp , size); 
 	}
 	if(vir_address == 0)
 	{
@@ -791,7 +795,9 @@ static void init_debug_memfs(void)
 	phy_addr_entry = debugfs_create_x32("phy_addr", S_IRWXUGO, debug_mem_dir,(u32 *)&phy_addr);
 	phy_value_entry = debugfs_create_file("phy_value", 0777,debug_mem_dir, &phy_value,&fops_phy_value);
 	phy_printmore_entry = debugfs_create_file("phy_printmems", 0777,debug_mem_dir, &phy_printmore,&fops_phy_printmems);
+#ifdef SUSPEND_RESUME_DEBUG
 	suspend_resume_addr_entry = debugfs_create_x32("suspend_resume_addr", S_IRUGO, debug_mem_dir,(u32 *)&suspend_resume_addr);
+#endif
 }
 
 static void init_task_structfs(void)
@@ -821,9 +827,26 @@ static void composite_command_context(void)
 	command_context = command_context|cpu_id_mrc_mcr<<20|cpu_id_crn<<16|cpu_id_opcode2<<5|cpu_id_crm;
 	printk("command_context = 0x%x \n" , command_context);
 }
+
+#ifdef SUSPEND_RESUME_DEBUG
+extern void suspend_last(void);
+extern void resume_first(void);
+#endif
 static int cpu_id_get(void *data, u64 *val)
 {
 	unsigned int value = 0;
+	static int suspend = 0;
+#ifdef SUSPEND_RESUME_DEBUG
+	if(suspend == 0)
+	{
+		suspend_last();
+	}
+	else
+	{
+		resume_first();
+	}
+#endif
+	suspend = !suspend;
 	if(vir_address_command != 0)
 	{
 		unsigned long phy_addr = 0 ; 
@@ -872,7 +895,9 @@ static void remove_cpu_info_structfs(void)
 
 static void remove_debug_memfs(void)
 {
+#ifdef SUSPEND_RESUME_DEBUG
 	debugfs_remove(suspend_resume_addr_entry);
+#endif
 	debugfs_remove(value_dentry);
 	debugfs_remove(address_entry);
 	debugfs_remove(print_entry);
@@ -896,15 +921,14 @@ static void remove_task_structfs(void)
 	debugfs_remove(task_struct_dir);
 }
 
-
+#ifdef SUSPEND_RESUME_DEBUG
 #define SUSPEND_RESUME_COUNT 1024
-unsigned int suspend_resume_base_addr[SUSPEND_RESUME_COUNT*3];
-
+unsigned long int  suspend_resume_base_addr[SUSPEND_RESUME_COUNT*3];
 
 void suspend_last(void)
 {
 	int i = 0;
-	unsigned int *suspend_value=suspend_resume_base_addr+SUSPEND_RESUME_COUNT;
+	unsigned long int *suspend_value=suspend_resume_base_addr+SUSPEND_RESUME_COUNT;
 	pr_err("wgz %s\n",__FUNCTION__);
 	for(i = 0 ; i < SUSPEND_RESUME_COUNT; ++i)
 	{
@@ -912,40 +936,45 @@ void suspend_last(void)
 		{
 			//resume_value[i] = get_phy_value(suspend_resume_base_addr[i]);
 			set_phy_value(suspend_resume_base_addr[i],suspend_value[i]);
-			pr_err("suspend_resume_base_addr[i] = 0x%x ,suspend_value[i] = 0x%x" 
+			pr_err("suspend_resume_base_addr[i] = 0x%lx ,suspend_value[i] = 0x%lx\n" 
 				, suspend_resume_base_addr[i] , suspend_value[i]);
+			udelay(10);
 		}
 	}
+	
 }
 
 void resume_first(void)
 {
 	int i = 0;
-	unsigned int *resume_value=suspend_resume_base_addr+SUSPEND_RESUME_COUNT*2;
+	unsigned long int *resume_value=suspend_resume_base_addr+SUSPEND_RESUME_COUNT*2;
 	pr_err("wgz %s\n",__FUNCTION__);
 	for(i = 0 ; i < SUSPEND_RESUME_COUNT; ++i)
 	{
 		if(suspend_resume_base_addr[i] != 0)
 		{
-			pr_err("suspend_resume_base_addr[i] = 0x%x , resume_value[i] = 0x%x " 
+			pr_err("suspend_resume_base_addr[i] = 0x%lx , resume_value[i] = 0x%lx \n" 
 				, suspend_resume_base_addr[i] , resume_value[i]);
 			set_phy_value(suspend_resume_base_addr[i],resume_value[i]);
+			udelay(10);
 		}
 	}
 }
 
 extern void (*last_step_for_suspend)(void)  ;
 extern void (*first_step_for_resume)(void) ;
-
+#endif
 static int __init debug_init(void)
 {
 
 	init_debug_memfs();
 	init_task_structfs();
 	init_cpu_info_structfs();
+#ifdef SUSPEND_RESUME_DEBUG
 	last_step_for_suspend = suspend_last;
 	first_step_for_resume = resume_first;
 	suspend_resume_addr= (unsigned int) &suspend_resume_base_addr;
+#endif
 	return 0;
 }
 

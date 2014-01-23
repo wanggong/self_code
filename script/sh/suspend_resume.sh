@@ -68,7 +68,7 @@ function phy_to_vir()
 #phy_address=0xc10bf004
 phy_address=`cat $suspend_resume_addr`;
 echo $phy_address;
-let suspend_resume_count=1024;
+let suspend_resume_count=1024*4;
 let suspend_value_address=$phy_address+$suspend_resume_count;
 let resume_value_address=$phy_address+$suspend_resume_count*2;
 phy_index=0;
