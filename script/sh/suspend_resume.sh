@@ -7,7 +7,8 @@ count_path="/data/debugfs/debug_mem/count";
 phy_printmems="/data/debugfs/debug_mem/phy_printmems";
 vir_2_phy="/data/debugfs/debug_mem/vir_2_phy";
 phy_2_vir="/data/debugfs/debug_mem/phy_2_vir";
-suspend_resume_addr="/data/debugfs/debug_mem/suspend_resume_addr";
+suspend_resume_addr="/data/debugfs/debug_mem/suspend_resume/suspend_resume_addr";
+suspend_resume_test="/data/debugfs/debug_mem/suspend_resume/test";
 
 function set_value_addr()
 {
@@ -149,6 +150,11 @@ function reset_suspend_resume()
 	let phy_index=$phy_index+1;
 }
 
+function suspend_resume_test()
+{
+	echo $1 > $suspend_resume_test;
+}
+
 
 function base_help()
 {
@@ -159,6 +165,7 @@ function base_help()
 	echo "set_gpio_suspend_resume gpio_num suspend_value resume_value (0 LOW, 2 HIGH)"
 	echo "set_ldo_suspend_resume ldo_num suspend_value resume_value (0 disable 0x80 enable)"
 	echo "reset_suspend_resume reset it"
+	echo "suspend_resume_test value (0 for suspend , 1 for resume)"
 }
 
 base_help

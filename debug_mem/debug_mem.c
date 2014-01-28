@@ -39,44 +39,6 @@
 
 
 static struct dentry *debug_mem_dir;
-static struct dentry *value_dentry;
-static struct dentry *address_entry;
-static struct dentry *print_entry;
-//static struct dentry *testvalue_entry;
-static struct dentry *test_buf_addr_entry;
-static struct dentry *printmore_entry;
-static struct dentry *count_entry;
-static struct dentry *vir_2_phy_entry;
-static struct dentry *phy_2_vir_entry;
-static struct dentry *phy_addr_entry;
-static struct dentry *phy_value_entry;
-static struct dentry *phy_printmore_entry;
-
-
-static struct dentry *task_struct_dir;
-static struct dentry *pid_entry;
-static struct dentry *task_struct_addr_entry;
-
-static struct dentry *cpu_info_dir;
-static struct dentry *cpu_id_entry;
-static struct dentry *cpu_id_opcode2_entry;
-static struct dentry *cpu_id_crn_entry;
-static struct dentry *cpu_id_crm_entry;
-static struct dentry *cpu_id_mrc_mcr_entry;
-
-#ifdef SUSPEND_RESUME_DEBUG
-static struct dentry *suspend_resume_addr_entry;
-#endif
-
-
-
-
-
-
-
-
-
-
 
 struct test_buffer
 {
@@ -95,9 +57,6 @@ static unsigned long phy_2_vir = 1;
 static unsigned long phy_addr = 0x20000;
 static unsigned long phy_value = 0;
 static unsigned long phy_printmore = 1;
-#ifdef SUSPEND_RESUME_DEBUG
-static unsigned long suspend_resume_addr= 0;
-#endif
 
 static unsigned long pid = 0;
 static unsigned long task_struct_addr = 0;
@@ -120,153 +79,6 @@ static unsigned long task_struct_addr = 0;
 #define ARM_SEC_LEVEL_64K 0x1
 #define ARM_SEC_LEVEL_1K 0x3
 #define ARM_SEC_LEVEL_NONE 0x0
-
-
-#if 0
-#define pgd_addr(pgd , v_addr)((pgd&(~((1<<21)-1)))|(v_addr&((1<<21)-1)))
-
-
-#define arm_pgd_index(addr)		((addr) >> ARM_FIRST_LEVEL_SHIFT)
-#define arm_pgd_offset(mm, addr)	((mm)->pgd + pgd_index(addr))
-#define arm_pgd_offset_k(addr)	pgd_offset(&init_mm, addr)
-
-
-
-
-#define VM_ARM_SECTION_MAPPING	0x80000000
-#define VM_ARM_STATIC_MAPPING	0x40000000
-#define VM_ARM_EMPTY_MAPPING	0x20000000
-#define VM_ARM_MTYPE(mt)		((mt) << 20)
-#define VM_ARM_MTYPE_MASK	(0x1f << 20)
-#define VM_ARM_DMA_CONSISTENT	0x20000000
-
-struct mem_type {
-	pteval_t prot_pte;
-	pmdval_t prot_l1;
-	pmdval_t prot_sect;
-	unsigned int domain;
-};
-
-
-static void __iomem * mem_arm_ioremap_pfn_caller(unsigned long pfn,
-	unsigned long offset, size_t size, unsigned int mtype, void *caller)
-{
-	const struct mem_type *type;
-	int err;
-	unsigned long addr;
- 	struct vm_struct * area;
-
-#ifndef CONFIG_ARM_LPAE
-	/*
-	 * High mappings must be supersection aligned
-	 */
-	if (pfn >= 0x100000 && (__pfn_to_phys(pfn) & ~SUPERSECTION_MASK))
-		return NULL;
-#endif
-
-	type = get_mem_type(mtype);
-	if (!type)
-		return NULL;
-
-	/*
-	 * Page align the mapping size, taking account of any offset.
-	 */
-	size = PAGE_ALIGN(offset + size);
-
-
-#if 0	//wgz remove
-	/*
-	 * Try to reuse one of the static mapping whenever possible.
-	 */
-	read_lock(&vmlist_lock);
-	for (area = vmlist; area; area = area->next) {
-		if (!size || (sizeof(phys_addr_t) == 4 && pfn >= 0x100000))
-			break;
-		if (!(area->flags & VM_ARM_STATIC_MAPPING))
-			continue;
-		if ((area->flags & VM_ARM_MTYPE_MASK) != VM_ARM_MTYPE(mtype))
-			continue;
-		if (__phys_to_pfn(area->phys_addr) > pfn ||
-		    __pfn_to_phys(pfn) + size-1 > area->phys_addr + area->size-1)
-			continue;
-		/* we can drop the lock here as we know *area is static */
-		read_unlock(&vmlist_lock);
-		addr = (unsigned long)area->addr;
-		addr += __pfn_to_phys(pfn) - area->phys_addr;
-		return (void __iomem *) (offset + addr);
-	}
-	read_unlock(&vmlist_lock);
-#endif
-	/*
-	 * Don't allow RAM to be mapped - this causes problems with ARMv6+
-	 */
-#if 0  //wgz remove
-	if (WARN_ON(pfn_valid(pfn)))
-		return NULL;
-#endif
-	area = get_vm_area_caller(size, VM_IOREMAP, caller);
- 	if (!area)
- 		return NULL;
- 	addr = (unsigned long)area->addr;
-
-#if !defined(CONFIG_SMP) && !defined(CONFIG_ARM_LPAE)
-	if (DOMAIN_IO == 0 &&
-	    (((cpu_architecture() >= CPU_ARCH_ARMv6) && (get_cr() & CR_XP)) ||
-	       cpu_is_xsc3()) && pfn >= 0x100000 &&
-	       !((__pfn_to_phys(pfn) | size | addr) & ~SUPERSECTION_MASK)) {
-		area->flags |= VM_ARM_SECTION_MAPPING;
-		err = remap_area_supersections(addr, pfn, size, type);
-	} else if (!((__pfn_to_phys(pfn) | size | addr) & ~PMD_MASK)) {
-		area->flags |= VM_ARM_SECTION_MAPPING;
-		err = remap_area_sections(addr, pfn, size, type);
-	} else
-#endif
-		err = ioremap_page_range(addr, addr + size, __pfn_to_phys(pfn),
-					 __pgprot(type->prot_pte));
-
-	if (err) {
- 		vunmap((void *)addr);
- 		return NULL;
- 	}
-
-	flush_cache_vmap(addr, addr + size);
-	return (void __iomem *) (offset + addr);
-}
-
-
-static void __iomem *mem_arm_ioremap_caller(phys_addr_t phys_addr, size_t size,
-	unsigned int mtype, void *caller)
-{
-	phys_addr_t last_addr;
-	phys_addr_t offset = phys_addr & ~PAGE_MASK;
- 	unsigned long pfn = __phys_to_pfn(phys_addr);
-
- 	/*
- 	 * Don't allow wraparound or zero size
-	 */
-	last_addr = phys_addr + size - 1;
-	if (!size || last_addr < phys_addr)
-		return NULL;
-
-	return mem_arm_ioremap_pfn_caller(pfn, offset, size, mtype,caller);
-}
-
-
-
-static void __iomem *mem_arm_ioremap(phys_addr_t phys_addr, size_t size, unsigned int mtype)
-{
-	return mem_arm_ioremap_caller(phys_addr, size, mtype,
-		__builtin_return_address(0));
-}
-
-#define mem_io_remap(cookie,size)		mem_arm_ioremap((cookie), (size), MT_DEVICE)
-
-#endif
-
-
-
-
-
 
 static int isaddressvalid(int write,unsigned long vir_addr)
 {
@@ -342,8 +154,6 @@ static int isaddressvalid(int write,unsigned long vir_addr)
 	
 	return 1;
 }
-
-
 
 static unsigned long get_phy_address(unsigned long vir_addr)
 {
@@ -491,9 +301,6 @@ static int printptetablefunc(void *data, u64 *val)
 	
 	return 0;
 }
-
-
-
 
 static int debugfs_set_reg(void *data, u64 val)
 {
@@ -783,29 +590,25 @@ DEFINE_SIMPLE_ATTRIBUTE(fops_task_struct_addr, task_struct_addr_get_func, 0, "0x
 static void init_debug_memfs(void)
 {
 	debug_mem_dir = debugfs_create_dir("debug_mem", NULL);
-	address_entry = debugfs_create_x32("address", S_IRWXUGO, debug_mem_dir,(u32 *)&address);
-	value_dentry = debugfs_create_file("value", 0777,debug_mem_dir, &value,&fops_reg);
-	print_entry = debugfs_create_file("printptetable", 0777,debug_mem_dir, &printptetable,&fops_printptetable);
-//	testvalue_entry = debugfs_create_x32("test_array_buf", S_IRWXUGO, debug_mem_dir,(u32 *)&test_array_buf);
-	test_buf_addr_entry = debugfs_create_x32("test_buf_addr", S_IRWXUGO, debug_mem_dir,(u32 *)&test_buf_addr);
-	printmore_entry = debugfs_create_file("printmems", 0777,debug_mem_dir, &printmore,&fops_printmems);
-	count_entry = debugfs_create_x32("count", S_IRWXUGO, debug_mem_dir,(u32 *)&count);
-	vir_2_phy_entry = debugfs_create_file("vir_2_phy", 0777,debug_mem_dir, &vir_2_phy,&fops_vir_2_phy);
-	phy_2_vir_entry = debugfs_create_file("phy_2_vir", 0777,debug_mem_dir, &phy_2_vir,&fops_phy_2_vir);
-	phy_addr_entry = debugfs_create_x32("phy_addr", S_IRWXUGO, debug_mem_dir,(u32 *)&phy_addr);
-	phy_value_entry = debugfs_create_file("phy_value", 0777,debug_mem_dir, &phy_value,&fops_phy_value);
-	phy_printmore_entry = debugfs_create_file("phy_printmems", 0777,debug_mem_dir, &phy_printmore,&fops_phy_printmems);
-#ifdef SUSPEND_RESUME_DEBUG
-	suspend_resume_addr_entry = debugfs_create_x32("suspend_resume_addr", S_IRUGO, debug_mem_dir,(u32 *)&suspend_resume_addr);
-#endif
+	debugfs_create_x32("address", S_IRWXUGO, debug_mem_dir,(u32 *)&address);
+	debugfs_create_file("value", 0777,debug_mem_dir, &value,&fops_reg);
+	debugfs_create_file("printptetable", 0777,debug_mem_dir, &printptetable,&fops_printptetable);
+	debugfs_create_x32("test_buf_addr", S_IRWXUGO, debug_mem_dir,(u32 *)&test_buf_addr);
+	debugfs_create_file("printmems", 0777,debug_mem_dir, &printmore,&fops_printmems);
+	debugfs_create_x32("count", S_IRWXUGO, debug_mem_dir,(u32 *)&count);
+	debugfs_create_file("vir_2_phy", 0777,debug_mem_dir, &vir_2_phy,&fops_vir_2_phy);
+	debugfs_create_file("phy_2_vir", 0777,debug_mem_dir, &phy_2_vir,&fops_phy_2_vir);
+	debugfs_create_x32("phy_addr", S_IRWXUGO, debug_mem_dir,(u32 *)&phy_addr);
+	debugfs_create_file("phy_value", 0777,debug_mem_dir, &phy_value,&fops_phy_value);
+	debugfs_create_file("phy_printmems", 0777,debug_mem_dir, &phy_printmore,&fops_phy_printmems);
 }
 
 static void init_task_structfs(void)
 {
 	
-	task_struct_dir = debugfs_create_dir("task_struct", debug_mem_dir);
-	pid_entry = debugfs_create_x32("pid", S_IRWXUGO, task_struct_dir,(u32 *)&pid);
-	task_struct_addr_entry = debugfs_create_file("task_struct_addr", 0777,task_struct_dir, &task_struct_addr,&fops_task_struct_addr);
+	struct dentry *task_struct_dir = debugfs_create_dir("task_struct", debug_mem_dir);
+	debugfs_create_x32("pid", S_IRWXUGO, task_struct_dir,(u32 *)&pid);
+	debugfs_create_file("task_struct_addr", 0777,task_struct_dir, &task_struct_addr,&fops_task_struct_addr);
 }
 
 #if 1		//CPU
@@ -828,24 +631,10 @@ static void composite_command_context(void)
 	printk("command_context = 0x%x \n" , command_context);
 }
 
-#ifdef SUSPEND_RESUME_DEBUG
-extern void suspend_last(void);
-extern void resume_first(void);
-#endif
 static int cpu_id_get(void *data, u64 *val)
 {
 	unsigned int value = 0;
 	static int suspend = 0;
-#ifdef SUSPEND_RESUME_DEBUG
-	if(suspend == 0)
-	{
-		suspend_last();
-	}
-	else
-	{
-		resume_first();
-	}
-#endif
 	suspend = !suspend;
 	if(vir_address_command != 0)
 	{
@@ -874,57 +663,19 @@ DEFINE_SIMPLE_ATTRIBUTE(fops_cpu_id, cpu_id_get, 0, "0x%08llx\n");
 
 static void init_cpu_info_structfs(void)
 {
-	cpu_info_dir = debugfs_create_dir("cpu_info", debug_mem_dir);
-	cpu_id_entry = debugfs_create_file("cpu_id", 0777,cpu_info_dir, &cpu_id,&fops_cpu_id);
-	cpu_id_opcode2_entry = debugfs_create_x32("cpu_id_opcode2", S_IRWXUGO, cpu_info_dir,(u32 *)&cpu_id_opcode2);
-	cpu_id_crn_entry = debugfs_create_x32("cpu_id_crn", S_IRWXUGO, cpu_info_dir,(u32 *)&cpu_id_crn);
-	cpu_id_crm_entry = debugfs_create_x32("cpu_id_crm", S_IRWXUGO, cpu_info_dir,(u32 *)&cpu_id_crm);
-	cpu_id_mrc_mcr_entry = debugfs_create_x32("cpu_id_mrc_mcr", S_IRWXUGO, cpu_info_dir,(u32 *)&cpu_id_mrc_mcr);
-}
-
-static void remove_cpu_info_structfs(void)
-{
-	debugfs_remove(cpu_id_mrc_mcr_entry);
-	debugfs_remove(cpu_id_crm_entry);
-	debugfs_remove(cpu_id_crn_entry);
-	debugfs_remove(cpu_id_opcode2_entry);
-	debugfs_remove(cpu_id_entry);
-	debugfs_remove(cpu_info_dir);
+	struct dentry *cpu_info_dir = debugfs_create_dir("cpu_info", debug_mem_dir);
+	debugfs_create_file("cpu_id", 0777,cpu_info_dir, &cpu_id,&fops_cpu_id);
+	debugfs_create_x32("cpu_id_opcode2", S_IRWXUGO, cpu_info_dir,(u32 *)&cpu_id_opcode2);
+	debugfs_create_x32("cpu_id_crn", S_IRWXUGO, cpu_info_dir,(u32 *)&cpu_id_crn);
+	debugfs_create_x32("cpu_id_crm", S_IRWXUGO, cpu_info_dir,(u32 *)&cpu_id_crm);
+	debugfs_create_x32("cpu_id_mrc_mcr", S_IRWXUGO, cpu_info_dir,(u32 *)&cpu_id_mrc_mcr);
 }
 #endif
 
-static void remove_debug_memfs(void)
-{
-#ifdef SUSPEND_RESUME_DEBUG
-	debugfs_remove(suspend_resume_addr_entry);
-#endif
-	debugfs_remove(value_dentry);
-	debugfs_remove(address_entry);
-	debugfs_remove(print_entry);
-	debugfs_remove(test_buf_addr_entry);
-//	debugfs_remove(testvalue_entry);
-	debugfs_remove(vir_2_phy_entry);
-	debugfs_remove(phy_2_vir_entry);
-	debugfs_remove(phy_addr_entry);
-	debugfs_remove(phy_value_entry);
-	debugfs_remove(phy_printmore_entry);
-	debugfs_remove(count_entry);
-	debugfs_remove(printmore_entry);
-	debugfs_remove(debug_mem_dir);
-}
-
-static void remove_task_structfs(void)
-{
-	
-	debugfs_remove(task_struct_addr_entry);
-	debugfs_remove(pid_entry);
-	debugfs_remove(task_struct_dir);
-}
 
 #ifdef SUSPEND_RESUME_DEBUG
 #define SUSPEND_RESUME_COUNT 1024
 unsigned long int  suspend_resume_base_addr[SUSPEND_RESUME_COUNT*3];
-
 void suspend_last(void)
 {
 	int i = 0;
@@ -961,6 +712,33 @@ void resume_first(void)
 	}
 }
 
+static int resume_suspend_set(void *data, u64 val)
+{
+	*(u32*)data = (u32)val;
+	if(val == 0)
+	{
+		suspend_last();
+	}
+	else
+	{
+		resume_first();
+	}
+	return 0;
+}
+
+
+DEFINE_SIMPLE_ATTRIBUTE(fops_resume_suspend, 0 , resume_suspend_set, "0x%08llx\n");
+
+static unsigned long suspend_resume_test = 0;
+static unsigned long suspend_resume_addr= 0;
+
+static void init_suspend_resume_fs(void)
+{
+	struct dentry *suspend_resume_dir = debugfs_create_dir("suspend_resume", debug_mem_dir);
+	debugfs_create_file("test", 0777,suspend_resume_dir, &suspend_resume_test,&fops_resume_suspend);
+	debugfs_create_x32("suspend_resume_addr", S_IRUGO, suspend_resume_dir,(u32 *)&suspend_resume_addr);
+}
+
 extern void (*last_step_for_suspend)(void)  ;
 extern void (*first_step_for_resume)(void) ;
 #endif
@@ -974,6 +752,7 @@ static int __init debug_init(void)
 	last_step_for_suspend = suspend_last;
 	first_step_for_resume = resume_first;
 	suspend_resume_addr= (unsigned int) &suspend_resume_base_addr;
+	init_suspend_resume_fs();
 #endif
 	return 0;
 }
@@ -981,12 +760,10 @@ static int __init debug_init(void)
 static void __exit debug_exit(void)
 {
 	pr_info("remove\n");
-	remove_cpu_info_structfs();
-	remove_task_structfs();
-	remove_debug_memfs();
-	
+	debugfs_remove_recursive(debug_mem_dir);	
 }
 
 module_init(debug_init);
 module_exit(debug_exit);
 MODULE_LICENSE("GPL");
+
