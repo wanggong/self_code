@@ -118,18 +118,18 @@ replacestr();
 #for loop
 sub forloop()
 {
-	$i = 3;
-  for($i=3;$i<=100;$i++)
-  {
-  	printf("i is %d\n" , $i);
-  	if(m/$ARGV[$i]/)
-  	{
-  		next;
-  	}
-  	else
-  	{
-  		last;
-  	}
-  }
-  printf("$i = %d\n" , $i);
+		$i = 3;
+    for($i=3;$i<=100;$i++)
+    {
+    	printf("i is %d\n" , $i);
+    	if(m/$ARGV[$i]/)
+    	{
+    		next;
+    	}
+    	else
+    	{
+    		last;
+    	}
+    }
+    printf("$i = %d\n" , $i);
 }
