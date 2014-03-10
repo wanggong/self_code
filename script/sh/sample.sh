@@ -187,3 +187,6 @@ echo "equal"
 fi
 }
  
+ #string join
+debugfs_dir="/data/debugfs/"
+value_dir=${debugfs_dir}"/wanggongzhen"
