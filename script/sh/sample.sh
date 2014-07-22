@@ -62,6 +62,33 @@ while_function()
 	done
 }
 
+#while function usage
+function test_f()
+{
+	echo wang
+}
+#$1 times for while
+#$2 the function to exec
+function while_function_base()
+{
+	index=0;
+	while [ 1 ]
+	do
+		if(($index<$1))
+		then
+			$2
+			index=$index+1;
+		else
+			break;
+		fi
+	done
+}
+
+function test_while_function_base()
+{
+	while_function_base 3 test_f
+}
+
 #array test
 #${#array[*]} is the length of array
 #${new_array[0]} is the array item 0
