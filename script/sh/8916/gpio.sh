@@ -1,6 +1,6 @@
 
-phy_value_path="/data/debugfs/debug_mem/phy_value";
-phy_addr_path="/data/debugfs/debug_mem/phy_addr";
+. base.sh;
+
 GPIO_BASE_ADDRESS=0x01000000;
 
 #地址获取文档：MSM8916 Sofware Interface for OEMs
