@@ -1,25 +1,9 @@
-
-phy_value_path="/data/debugfs/debug_mem/phy_value";
-phy_addr_path="/data/debugfs/debug_mem/phy_addr";
-count_path="/data/debugfs/debug_mem/count";
-phy_printmems="/data/debugfs/debug_mem/phy_printmems";
-
+. base.sh
 #2716页
 
 GET_CHANNEL_ADDRESS=0x0200F800
-channel_array=(1 2 3);
-IO_VALUE=0;
-function io_value()
-{
-	echo $1 > $phy_addr_path;
-	if(($#<2))
-	then
-		IO_VALUE=`cat $phy_value_path`;
-		#echo $IO_VALUE;
-	fi
-}
-
-function get_channel()
+get_channel_config_returned=(1 2 3);
+function get_channel_config()
 {
 	local index=1;
 	while [ 1 ]
@@ -27,40 +11,39 @@ function get_channel()
 		if(($index<=128))
 		then
 			let address_io_value=$GET_CHANNEL_ADDRESS+0x4*$index;
-			io_value $address_io_value;
-			channel_array[$index]=$IO_VALUE;
+			io_value_get $address_io_value;
+			get_channel_config_returned[$index]=$io_value_get_returned;
 			let index=$index+1;
 		else
 			break;
 		fi
 	done
-	#echo ${channel_array[*]};
+	#echo ${get_channel_config_returned[*]};
 }
 
-channel_index=0;
-function find_channel()
+find_channel_index_returned=0;
+function find_channel_index()
 {
 	let sid=$1;
 	let addr=$2;
 	let pid=$addr\>\>8;
-	echo "sid=$sid,pid=$pid";
-	get_channel;
+	#echo "sid=$sid,pid=$pid";
 	local index=1;
-	let match_channel=$sid*0x10000+$pid*0x100;
-	echo "match_channel:$match_channel";
+	let match_channel_value=$sid*0x10000+$pid*0x100;
+	#echo "match_channel_value:$match_channel_value";
 	while [ 1 ]
 	do
 		if(($index<=128))
 		then
-			let ch_sid=channel_array[$index]\>\>16\&0xF;
-			let ch_pid=channel_array[$index]\>\>8\&0xFF;
-			echo "ch_sid=$ch_sid,ch_pid=$ch_pid";
-			echo "channel_array = channel_array[$index]";
-			if(($match_channel==channel_array[$index]))
+			#let ch_sid=get_channel_config_returned[$index]\>\>16\&0xF;
+			#let ch_pid=get_channel_config_returned[$index]\>\>8\&0xFF;
+			#echo "ch_sid=$ch_sid,ch_pid=$ch_pid";
+			#echo "get_channel_config_returned = get_channel_config_returned[$index]";
+			if(($match_channel_value==get_channel_config_returned[$index]))
 			then
 			{
-				channel_index=$index;
-				echo "finded";
+				find_channel_index_returned=$index;
+				#echo "finded";
 				break;
 			}
 			fi
@@ -69,24 +52,22 @@ function find_channel()
 			break;
 		fi
 	done
-	echo channel_index = $channel_index;
+	#echo find_channel_index_returned = $find_channel_index_returned;
 }
 
-channel_offset=0;
-function find_channel_offset()
+get_channel_offset_returned=0;
+function update_channel_offset()
 {
 	let sid=$1\>\>16\&0xf;
 	let addr=$1\&0xffff;
-	find_channel $sid $addr;
-	let channel_offset=$channel_index*0x8000+0*$1;
+	find_channel_index $sid $addr;
+	let get_channel_offset_returned=$find_channel_index_returned*0x8000+0*$1;
 }
 
 
 
-base_addr=0x02C00000;
+pmic_core_base_addr=0x02C00000;
 write_base_addr=0x02400000;
-channel_max=6;
-regs_per_channel=0x8000;
 cmd_offset=0;
 config_offset=0x4;
 status_offset=0x8;
@@ -97,85 +78,97 @@ rdata1_offset=0x1c;
 rdata2_offset=0x20;
 
 #var
-channel=0;
 read_data0=0;
 read_data1=0;
 read_data2=0;
 command_will_send=0;
 
 # first parameter is the command
-function set_phy_address()
+
+pmic_get_phy_address_returned=0；
+function pmic_get_phy_address
 {
-	let address=$base_addr+$channel_offset+$1;
-	echo "address:$address";
-	echo $address > $phy_addr_path;
+	let pmic_get_phy_address_returned=$1+$get_channel_offset_returned+$2;
+	#echo "address:$address";
+	echo $pmic_get_phy_address > $phy_addr_path;
+}
+get_read_phy_address_returned=0;
+function get_read_phy_address()
+{
+	pmic_get_phy_address $pmic_core_base_addr $1;
+	get_read_phy_address_returned=$pmic_get_phy_address_returned;
 }
 
-function set_write_phy_address()
+get_write_phy_address_returned=0;
+function get_write_phy_address()
 {
-	let address=$write_base_addr+$channel_offset+$1;
-#	echo "address:$address";
-	echo $address > $phy_addr_path;
+	pmic_get_phy_address $write_base_addr $1;
+	get_write_phy_address_returned=$pmic_get_phy_address_returned;
 }
 
-function write_command()
+function write_read_command()
 {
-	set_phy_address $cmd_offset
-	echo $1 > $phy_value_path;
+	get_read_phy_address $cmd_offset;
+	io_value_set $get_read_phy_address_returned  $1;
 }
 
 function write_write_command()
 {
-	set_write_phy_address $cmd_offset
-	echo $1 > $phy_value_path;
+	get_write_phy_address $cmd_offset
+	io_value_set $get_write_phy_address_returned  $1;
 }
 
 function write_data0()
 {
-	set_write_phy_address $wdata0_offset
-	echo $1 > $phy_value_path;
+	get_write_phy_address $wdata0_offset
+	io_value_set $get_write_phy_address_returned $1;
 }
 
 function write_data1()
 {
-	set_write_phy_address $wdata1_offset
-	echo $1 > $phy_value_path;
+	get_write_phy_address $wdata1_offset
+	io_value_set $get_write_phy_address_returned  $1;
 }
 
 
 function read_data()
 {
-	set_phy_address $rdata0_offset;
-	read_data0=`cat $phy_value_path`;
-	set_phy_address $rdata1_offset
-	read_data1=`cat $phy_value_path`;
-	set_phy_address $rdata2_offset
-	read_data2=`cat $phy_value_path`;
+	get_read_phy_address $rdata0_offset;
+	io_value_get $get_read_phy_address_returned;
+	read_data0=$io_value_get_returned;
+	
+	get_read_phy_address $rdata1_offset
+	io_value_get $get_read_phy_address_returned;
+	read_data1=$io_value_get_returned;
+	
+	get_read_phy_address $rdata2_offset
+	io_value_get $get_read_phy_address_returned;
+	read_data1=$io_value_get_returned;
 }
 
 #$1 0 for write 1 for read
 #$2 sid charging is 0 , ldo is 2
 #$3 address
 #$4 count
-function composite_and_write_command()
+function composite_read_command_and_send()
 {
 	let opcode=$1\<\<27;
 	let addr=\($3\&0xffff\);
 	let sid=$3\>\>16;
 	let read_count=$4-1;
-	echo "sid=$sid,addr=$addr";
+	#echo "sid=$sid,addr=$addr";
 	let addr=addr\<\<4;
 	let command_will_send=$opcode\|$sid\|$addr\|$read_count;
-	write_command $command_will_send;
+	write_read_command $command_will_send;
 }
 
-function write_composite_and_write_command()
+function composite_write_command_and_send()
 {
 	let opcode=$1\<\<27;
 	let addr=\($3\&0xffff\);
 	let sid=$3\>\>16;
 	let read_count=$4-1;
-	echo "sid=$sid,addr=$addr";
+	#echo "sid=$sid,addr=$addr";
 	let addr=addr\<\<4;
 	let command_will_send=$opcode\|$sid\|$addr\|$read_count;
 	write_write_command $command_will_send;
@@ -183,17 +176,20 @@ function write_composite_and_write_command()
 
 function pmic_read1()
 {
-	find_channel_offset $1;
-	composite_and_write_command 0x01 0x0 $1 0x1;
+	#echo "before update_channel_offset";
+	update_channel_offset $1;
+	#echo "before composite_read_command_and_send";
+	composite_read_command_and_send 0x01 0x0 $1 0x1;
+	#echo "before read_data";
 	read_data;
 	echo $read_data0;
 }
 
 function pmic_write1()
 {
-	find_channel_offset $1;
+	update_channel_offset $1;
 	write_data0 $2;
-	write_composite_and_write_command 0x0 0x0 $1 0x1;
+	composite_write_command_and_send 0x0 0x0 $1 0x1;
 }
 
 function pmic_reg()
@@ -321,13 +317,15 @@ function ldo_status_all()
 
 function help_pmic()
 {
+	echo "----------------------------------------------------------";
 	echo "pmic_reg (reg_addr -value) read or write pmic reg";
 	echo "ldo_enable (reg_addr -value) read or write ldo enable reg";
 	echo "ldo_mode (reg_addr -value) read or write ldo mode reg";
 	echo "ldo_status_all print all ldo status";
 	echo " battery_only set battery only , not use usb power";
+	echo "----------------------------------------------------------";
 }
-
+get_channel_config;
 help_pmic;
 
 
