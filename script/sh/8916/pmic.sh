@@ -115,7 +115,10 @@ function write_read_command()
 function write_write_command()
 {
 	get_write_phy_address $cmd_offset
-	io_value_set $get_write_phy_address_returned  $1;
+	#io_value_set $get_write_phy_address_returned  $1;
+	parameter_format_io_address_array[$parameter_format_io_count]=$get_write_phy_address_returned;
+	parameter_format_io_value_array[$parameter_format_io_count]=$1;
+	let parameter_format_io_count=$parameter_format_io_count+1;
 }
 
 function write_data0()
@@ -124,11 +127,19 @@ function write_data0()
 	io_value_set $get_write_phy_address_returned $1;
 }
 
-function write_data1()
+function update_data0_array()
 {
-	get_write_phy_address $wdata1_offset
-	io_value_set $get_write_phy_address_returned  $1;
+	get_write_phy_address $wdata0_offset;
+	parameter_format_io_address_array[$parameter_format_io_count]=$get_write_phy_address_returned;
+	parameter_format_io_value_array[$parameter_format_io_count]=$1;
+	let parameter_format_io_count=$parameter_format_io_count+1;
 }
+
+#function write_data1()
+#{
+#	get_write_phy_address $wdata1_offset
+#	io_value_set $get_write_phy_address_returned  $1;
+#}
 
 
 function read_data()
@@ -162,7 +173,7 @@ function composite_read_command_and_send()
 	write_read_command $command_will_send;
 }
 
-function composite_write_command_and_send()
+function update_write_command()
 {
 	let opcode=$1\<\<27;
 	let addr=\($3\&0xffff\);
@@ -185,11 +196,21 @@ function pmic_read1()
 	echo $read_data0;
 }
 
-function pmic_write1()
+#$1 is the reg address
+#$2 is the reg value
+function pmic_update_write_array()
 {
 	update_channel_offset $1;
-	write_data0 $2;
-	composite_write_command_and_send 0x0 0x0 $1 0x1;
+	#write_data0 $2;
+	update_data0_array $2;
+	update_write_command 0x0 0x0 $1 0x1;
+}
+
+function pmic_write1()
+{
+	pmic_update_write_array $1 $2;
+	write_io_format_value_all;
+	parameter_format_io_count=0;
 }
 
 function pmic_reg()
@@ -264,10 +285,16 @@ ONE_LDO_REGS=0x100;
 ENABLE_REG_ADDR=0x46;
 MODE_REG_ADDR=0x45;
 LDO_COUNT=18；
-function ldo_enable()
+get_ldo_enable_address_returned=0;
+function get_ldo_enable_address()
 {
 	let ldo_index=$1-1;
-	let ldo_reg_addr=$LDO_BASE_START+$ldo_index*0x100+$ENABLE_REG_ADDR;
+	let get_ldo_enable_address_returned=$LDO_BASE_START+$ldo_index*0x100+$ENABLE_REG_ADDR;
+}
+function ldo_enable()
+{
+	get_ldo_enable_address $1;
+	let ldo_reg_addr=$get_ldo_enable_address_returned;
 	pmic_read1 $ldo_reg_addr;
 	if (($#>1))
 	then
