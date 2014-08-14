@@ -76,7 +76,7 @@ function while_function_base()
 	do
 		if(($index<$1))
 		then
-			$2
+			$2 $index
 			index=$index+1;
 		else
 			break;
