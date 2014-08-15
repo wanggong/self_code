@@ -1,9 +1,11 @@
 . base.sh
+. gpio.sh
+. pmic.sh
 
 
 #phy_address=0xc10bf004
 phy_address=`cat $suspend_resume_addr`;
-echo $phy_address;
+#echo $phy_address;
 let suspend_resume_count=1024*4;
 let suspend_value_address=$phy_address+$suspend_resume_count;
 let resume_value_address=$phy_address+$suspend_resume_count*2;
@@ -89,10 +91,12 @@ function suspend_resume_test()
 
 function base_help()
 {
+	echo "----------------------------SUSPEND_RESUME----------------------------------------------";
 	echo "set_gpio_suspend_resume gpio_num suspend_value resume_value (0 LOW, 2 HIGH)"
 	echo "set_ldo_suspend_resume ldo_num suspend_value resume_value (0 disable 0x80 enable)"
 	echo "reset_suspend_resume reset it"
 	echo "suspend_resume_test value (0 for suspend , 1 for resume)"
+	echo "----------------------------------------------------------------------------------------";
 }
 
 base_help

@@ -344,7 +344,7 @@ function ldo_status_all()
 
 function help_pmic()
 {
-	echo "----------------------------------------------------------";
+	echo "----------------------PMIC--------------------------------";
 	echo "pmic_reg (reg_addr -value) read or write pmic reg";
 	echo "ldo_enable (reg_addr -value) read or write ldo enable reg";
 	echo "ldo_mode (reg_addr -value) read or write ldo mode reg";

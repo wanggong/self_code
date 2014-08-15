@@ -151,7 +151,7 @@ read_io_format_value_all()
 
 function base_help()
 {
-	echo "--------------------------------------------";
+	echo "------------------BASE--------------------";
 	echo "vir_value address (-value)";
 	echo "io_value address (-value)";
 	echo "vir_to_phy value (convert virtual to phy)"

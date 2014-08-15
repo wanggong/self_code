@@ -168,9 +168,11 @@ function gpio_intr()
 
 function gpio_help()
 {
+	echo "------------------------------------GPIO----------------------------------------------";
 	echo "gpio_cfg (gpio_num -gpio_cfg) to get or set the config of the gpio";
 	echo "gpio_value (gpio_num -gpio_value) to get or set the value of the gpio";
 	echo "gpio_intr (gpio_num -gpio_intr_value) to get or set the gpio interrupt config value";
 	echo "get_gpio_intr_status gpio_num to get the gpio interrupt status value";
+	echo "----------------------------------------------------------------------------------------";
 }
 gpio_help;
