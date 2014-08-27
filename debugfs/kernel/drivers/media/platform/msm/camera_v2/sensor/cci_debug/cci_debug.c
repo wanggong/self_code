@@ -74,7 +74,7 @@ static int cci_value_set_func(void *data, u64 val)
 	i2c_value = (u32)val;
 	init_cci();
 	rc = msm_camera_cci_i2c_write(&i2c_client_test , i2c_reg_addr , (uint16_t)val , data_type);
-	if(!rc)
+	if(rc)
 	{
 		pr_err("write cci error rc = %d" , rc);
 	}
@@ -86,7 +86,7 @@ static int cci_value_get_func(void *data, u64 *val)
 	int rc = -1;
 	init_cci();
 	rc = msm_camera_cci_i2c_read(&i2c_client_test , i2c_reg_addr , (uint16_t *)val , data_type);
-	if(!rc)
+	if(rc)
 	{
 		pr_err("read cci error rc = %d" , rc);
 		*val = 0x57575777;

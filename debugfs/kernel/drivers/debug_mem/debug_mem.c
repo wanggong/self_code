@@ -36,6 +36,10 @@
 
 #include <asm/mach/map.h>
 #define SUSPEND_RESUME_DEBUG
+#define SUSPEND_RESUME_DEBUG_DUMP_REGULATOR
+#define SUSPEND_RESUME_DEBUG_DUMP_GPIO
+
+
 
 
 static struct dentry *debug_mem_dir;
@@ -519,14 +523,13 @@ static int phy_value_get_func(void *data, u64 *val)
 	return 0;
 }
 
-
-static int phy_printmemsfunc(void *data, u64 *val)
+static int phy_printmemsfunc_real(phys_addr_t phy_address , unsigned long length)
 {
 	void __iomem *vir_address;
 	int index;
-	vir_address = remap_io_or_mem((phys_addr_t)phy_addr,count);
+	vir_address = remap_io_or_mem(phy_address,length);
 	
-	for(index =0; index < count;++index)
+	for(index =0; index < length;++index)
 	{
 		if((unsigned long)vir_address % 512 == 0)
 		{
@@ -545,9 +548,15 @@ static int phy_printmemsfunc(void *data, u64 *val)
 	}
 	if(vir_address != NULL)
 	{
-		unmap_io_or_mem(phy_addr , vir_address);
+		unmap_io_or_mem(phy_address , vir_address);
 	}
 	return 0;
+}
+
+
+static int phy_printmemsfunc(void *data, u64 *val)
+{
+	return phy_printmemsfunc_real((phys_addr_t)phy_addr,count);
 }
 
 
@@ -672,15 +681,76 @@ static void init_cpu_info_structfs(void)
 }
 #endif
 
+#define MSM8916_GPIO_START 0x01000000
+#define MSM8916_GPIO_LENGTH 0x300000
+#define MSM8916_GPIO_NUM 122
+
+
+static void dump_gpio_register(void)
+{
+	void __iomem *vir_address;
+	int __iomem *vir_address_int;
+	int index;
+	unsigned int io_config = 0;
+	unsigned int io_inout = 0;
+	unsigned int io_intr_cfg = 0;
+	unsigned int io_intr_status = 0;
+	static char *pull_str[4] = {"NO","DOWN","KEEP","UP"};
+	
+	vir_address = remap_io_or_mem(MSM8916_GPIO_START,MSM8916_GPIO_LENGTH);
+	vir_address_int = (int __iomem *)vir_address;
+	printk(KERN_EMERG"%-4s%"
+		"-11s%-3s%-4s%-4s%-5s"
+		"%-11s%-2s%-2s"
+		"%-11s%-11s\n"
+		,"NUM"
+		,"config","OE","DRV","FUN","PULL"
+		,"value","O","I"
+		,"intr_cfg","intr_stat") ;
+	for(index = 0 ; index < MSM8916_GPIO_NUM ; index++)
+	{
+		io_config = *(vir_address_int + index*0x1000/4);
+		io_inout = *(vir_address_int + (index*0x1000+4)/4);
+		io_intr_cfg = *(vir_address_int + (index*0x1000+8)/4);
+		io_intr_status = *(vir_address_int + (index*0x1000+0xC)/4);
+		printk(KERN_EMERG"%-4d"
+			"0x%-8x %-3s%-4d%-4d%-5s"
+			"0x%-8x %-2d%-2d"
+			"0x%-8x 0x%-8x\n" 
+			, index 
+			,io_config,(io_config&(1<9))?"EN":"NO",((((io_config>>6)&7)+1)*2),(io_config>>2)&0xF,pull_str[io_config&3]
+			,io_inout,io_inout&2,io_inout&1
+			, io_intr_cfg,io_intr_status) ;
+	}
+}
+
 
 #ifdef SUSPEND_RESUME_DEBUG
 #define SUSPEND_RESUME_COUNT 1024
 unsigned long int  suspend_resume_base_addr[SUSPEND_RESUME_COUNT*3];
+#ifdef SUSPEND_RESUME_DEBUG_DUMP_REGULATOR
+extern void reg_debug_consumers_show_all(void);
+extern void spmi_debug_dump_all_ldo(void);
+#endif
+
+#ifdef SUSPEND_RESUME_DEBUG_DUMP_GPIO
+void gpio_debug_show_all(void);
+#endif
+
 void suspend_last(void)
 {
 	int i = 0;
 	unsigned long int *suspend_value=suspend_resume_base_addr+SUSPEND_RESUME_COUNT;
 	pr_err("wgz %s\n",__FUNCTION__);
+#ifdef SUSPEND_RESUME_DEBUG_DUMP_REGULATOR
+	reg_debug_consumers_show_all();
+	spmi_debug_dump_all_ldo();
+#endif
+#ifdef SUSPEND_RESUME_DEBUG_DUMP_GPIO
+	gpio_debug_show_all();
+	dump_gpio_register();
+#endif
+
 	for(i = 0 ; i < SUSPEND_RESUME_COUNT; ++i)
 	{
 		if(suspend_resume_base_addr[i] != 0)
@@ -700,6 +770,15 @@ void resume_first(void)
 	int i = 0;
 	unsigned long int *resume_value=suspend_resume_base_addr+SUSPEND_RESUME_COUNT*2;
 	pr_err("wgz %s\n",__FUNCTION__);
+#ifdef SUSPEND_RESUME_DEBUG_DUMP_REGULATOR
+	spmi_debug_dump_all_ldo();
+	reg_debug_consumers_show_all();
+#endif
+#ifdef SUSPEND_RESUME_DEBUG_DUMP_GPIO
+	dump_gpio_register();
+	gpio_debug_show_all();
+#endif
+
 	for(i = 0 ; i < SUSPEND_RESUME_COUNT; ++i)
 	{
 		if(suspend_resume_base_addr[i] != 0)
