@@ -718,7 +718,7 @@ static void dump_gpio_register(void)
 			"0x%-8x %-2d%-2d"
 			"0x%-8x 0x%-8x\n" 
 			, index 
-			,io_config,(io_config&(1<9))?"EN":"NO",((((io_config>>6)&7)+1)*2),(io_config>>2)&0xF,pull_str[io_config&3]
+			,io_config,((io_config&(1<<9))&&(((io_config>>2)&0xF)==0))?"EN":"NO",((((io_config>>6)&7)+1)*2),(io_config>>2)&0xF,pull_str[io_config&3]
 			,io_inout,io_inout&2,io_inout&1
 			, io_intr_cfg,io_intr_status) ;
 	}
