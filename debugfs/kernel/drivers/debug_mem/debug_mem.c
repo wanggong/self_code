@@ -16,6 +16,8 @@
 #include <linux/times.h>
 #include <linux/debugfs.h>
 #include <asm/uaccess.h>
+#include <linux/rtc.h>
+
 
 
 
@@ -39,6 +41,8 @@
 #define SUSPEND_RESUME_DEBUG_DUMP_REGULATOR
 #define SUSPEND_RESUME_DEBUG_DUMP_GPIO
 
+#define debug_printk(format, arg...) do{if(debug&1){printk(format, ##arg);}}while(0)
+
 
 
 
@@ -49,6 +53,7 @@ struct test_buffer
 	unsigned long test_buf[1024];
 }__attribute__((aligned(4096)));
 
+static unsigned long debug = 0x00000000;
 static unsigned long address = 0xc0000000;
 static unsigned long value = 0x00000000;
 static unsigned long printptetable = 0;
@@ -95,63 +100,63 @@ static int isaddressvalid(int write,unsigned long vir_addr)
 	
 	if(!virt_addr_valid(vir_addr))
 	{
-		printk("address(0x%08lx) is not valid\n" , vir_addr);
+		debug_printk("address(0x%08lx) is not valid\n" , vir_addr);
 		//return 0;
 	}
 	pgd = pgd_offset(current->active_mm,vir_addr);
 	l_pgd = (unsigned long )(*pgd)[0];
-//	printk("init_mm = %p , current->mm = %p taskid = %d , pgd=0x%p , l_pgd=0x%08lx\n" , &init_mm , current->mm , current->pid , pgd , l_pgd);
+//	debug_printk("init_mm = %p , current->mm = %p taskid = %d , pgd=0x%p , l_pgd=0x%08lx\n" , &init_mm , current->mm , current->pid , pgd , l_pgd);
 	if((l_pgd&ARM_FIRST_LEVEL_MASK) == ARM_FIRST_LEVEL_NONE)
 	{
-		printk("address(0x%08lx) pgd = 0x%08lx , not matched\n" , vir_addr , l_pgd);
+		debug_printk("address(0x%08lx) pgd = 0x%08lx , not matched\n" , vir_addr , l_pgd);
 		return 0;
 	}
 
 	else if((l_pgd&ARM_FIRST_LEVEL_MASK) == ARM_FIRST_LEVEL_4K_TABLE)
 	{
-		printk("address(0x%08lx) pgd = 0x%08lx , match 4k table , not support\n",vir_addr,l_pgd);
+		debug_printk("address(0x%08lx) pgd = 0x%08lx , match 4k table , not support\n",vir_addr,l_pgd);
 		return 0;
 	}
 	
 	else if((l_pgd&ARM_FIRST_LEVEL_MASK) == ARM_FIRST_LEVEL_1M)
 	{
-		printk("arm 1M table \n");
-		printk("l_pgd= %08lx , vir_addr=%08lx , phy_addr = %08lx\n", l_pgd , vir_addr,(l_pgd&PGDIR_MASK)|(vir_addr&(PGDIR_SIZE-1)));
+		debug_printk("arm 1M table \n");
+		debug_printk("l_pgd= %08lx , vir_addr=%08lx , phy_addr = %08lx\n", l_pgd , vir_addr,(l_pgd&PGDIR_MASK)|(vir_addr&(PGDIR_SIZE-1)));
 		return 1;
 	}
 	
 	else //(l_pgd & ARM_FIRST_LEVEL_MASK == ARM_FIRST_LEVEL_1K_TABLE) only this
 	{
-		printk("address(0x%08lx) pgd = 0x%08lx , match 1k table \n" , vir_addr , l_pgd);
+		debug_printk("address(0x%08lx) pgd = 0x%08lx , match 1k table \n" , vir_addr , l_pgd);
 
 		pgd = pgd_offset(current->active_mm,vir_addr);
 		pte = pte_offset_map((pmd_t*)pgd, vir_addr);
 		if (pte_none(*pte)) 
 		{
-			printk("address(0x%lx) pte is none\n" , vir_addr);
+			debug_printk("address(0x%lx) pte is none\n" , vir_addr);
 			return 0;
 		}
 
 		pte_hw_arm = pte+PTRS_PER_PTE;
-		printk("pte = 0x%08lx  , pte_hw_arm =0x%08lx, pfn = 0x%08lx , phy_addr = 0x%08lx\n", (unsigned long)pte_val(*pte) ,(unsigned long)pte_val(*pte_hw_arm) ,pte_pfn(*pte), (pte_pfn(*pte)<<PAGE_SHIFT)&(vir_addr&PAGE_MASK));
+		debug_printk("pte = 0x%08lx  , pte_hw_arm =0x%08lx, pfn = 0x%08lx , phy_addr = 0x%08lx\n", (unsigned long)pte_val(*pte) ,(unsigned long)pte_val(*pte_hw_arm) ,pte_pfn(*pte), (pte_pfn(*pte)<<PAGE_SHIFT)&(vir_addr&PAGE_MASK));
 
 		l_pte = (unsigned long)(*pte_hw_arm);
 		if((l_pte&ARM_SEC_LEVEL_MASK) == ARM_FIRST_LEVEL_NONE)
 		{
-			printk("page not present\n");
+			debug_printk("page not present\n");
 		}
 		else if((l_pte&ARM_SEC_LEVEL_MASK) == ARM_SEC_LEVEL_64K)
 		{
-			printk("64k page , not support\n");
+			debug_printk("64k page , not support\n");
 		}
 		else if((l_pte&ARM_SEC_LEVEL_MASK) == ARM_SEC_LEVEL_1K)
 		{
-			printk("extend small 4k ok\n");
+			debug_printk("extend small 4k ok\n");
 		}
 
 		else //4k
 		{
-			printk("ok 4k page\n");
+			debug_printk("ok 4k page\n");
 			return 1;
 		}
 	}
@@ -172,65 +177,65 @@ static unsigned long get_phy_address(unsigned long vir_addr)
 	
 	if(!virt_addr_valid(vir_addr))
 	{
-		printk("address(0x%08lx) is not valid\n" , vir_addr);
+		debug_printk("address(0x%08lx) is not valid\n" , vir_addr);
 	}
 	pgd = pgd_offset(current->active_mm,vir_addr);
 	l_pgd = (unsigned long )(*pgd)[0];
-//	printk("init_mm = %p , current->mm = %p taskid = %d , pgd=0x%p , l_pgd=0x%08lx\n" , &init_mm , current->mm , current->pid , pgd , l_pgd);
+//	debug_printk("init_mm = %p , current->mm = %p taskid = %d , pgd=0x%p , l_pgd=0x%08lx\n" , &init_mm , current->mm , current->pid , pgd , l_pgd);
 	if((l_pgd&ARM_FIRST_LEVEL_MASK) == ARM_FIRST_LEVEL_NONE)
 	{
-		printk("address(0x%08lx) pgd = 0x%08lx , not matched\n" , vir_addr , l_pgd);
+		debug_printk("address(0x%08lx) pgd = 0x%08lx , not matched\n" , vir_addr , l_pgd);
 		return 0;
 	}
 
 	else if((l_pgd&ARM_FIRST_LEVEL_MASK) == ARM_FIRST_LEVEL_4K_TABLE)
 	{
-		printk("address(0x%08lx) pgd = 0x%08lx , match 4k table , not support\n",vir_addr,l_pgd);
+		debug_printk("address(0x%08lx) pgd = 0x%08lx , match 4k table , not support\n",vir_addr,l_pgd);
 		return 0;
 	}
 	
 	else if((l_pgd&ARM_FIRST_LEVEL_MASK) == ARM_FIRST_LEVEL_1M)
 	{
-		printk("arm 1M table \n");
-		printk("l_pgd= %08lx , vir_addr=%08lx , phy_addr = %08lx\n", l_pgd , vir_addr,(l_pgd&PGDIR_MASK)|(vir_addr&(PGDIR_SIZE-1)));
+		debug_printk("arm 1M table \n");
+		debug_printk("l_pgd= %08lx , vir_addr=%08lx , phy_addr = %08lx\n", l_pgd , vir_addr,(l_pgd&PGDIR_MASK)|(vir_addr&(PGDIR_SIZE-1)));
 		phy_address = (l_pgd&PGDIR_MASK)|(vir_addr&(PGDIR_SIZE-1));
 		return phy_address;
 	}
 	
 	else //(l_pgd & ARM_FIRST_LEVEL_MASK == ARM_FIRST_LEVEL_1K_TABLE) only this
 	{
-		printk("address(0x%08lx) pgd = 0x%08lx , match 1k table \n" , vir_addr , l_pgd);
+		debug_printk("address(0x%08lx) pgd = 0x%08lx , match 1k table \n" , vir_addr , l_pgd);
 
 		pgd = pgd_offset(current->active_mm,vir_addr);
 		pte = pte_offset_map((pmd_t*)pgd, vir_addr);
 		if (pte_none(*pte)) 
 		{
-			printk("address(0x%lx) pte is none\n" , vir_addr);
+			debug_printk("address(0x%lx) pte is none\n" , vir_addr);
 			return 0;
 		}
 
 		pte_hw_arm = pte+PTRS_PER_PTE;
-		printk("pte = %08lx  , pte_hw_arm =%08lx, pfn = %08lx , phy_addr = %08lx\n", (unsigned long)pte_val(*pte) ,(unsigned long)pte_val(*pte_hw_arm) ,pte_pfn(*pte), (pte_pfn(*pte)<<PAGE_SHIFT)&(vir_addr&PAGE_MASK));
+		debug_printk("pte = %08lx  , pte_hw_arm =%08lx, pfn = %08lx , phy_addr = %08lx\n", (unsigned long)pte_val(*pte) ,(unsigned long)pte_val(*pte_hw_arm) ,pte_pfn(*pte), (pte_pfn(*pte)<<PAGE_SHIFT)&(vir_addr&PAGE_MASK));
 
 		phy_address = (pte_pfn(*pte)<<PAGE_SHIFT)&(vir_addr&PAGE_MASK);
 			
 		l_pte = (unsigned long)(*pte_hw_arm);
 		if((l_pte&ARM_SEC_LEVEL_MASK) == ARM_FIRST_LEVEL_NONE)
 		{
-			printk("page not present\n");
+			debug_printk("page not present\n");
 		}
 		else if((l_pte&ARM_SEC_LEVEL_MASK) == ARM_SEC_LEVEL_64K)
 		{
-			printk("64k page , not support\n");
+			debug_printk("64k page , not support\n");
 		}
 		else if((l_pte&ARM_SEC_LEVEL_MASK) == ARM_SEC_LEVEL_1K)
 		{
-			printk("extend small 4k ok\n");
+			debug_printk("extend small 4k ok\n");
 		}
 
 		else //4k
 		{
-			printk("ok 4k page\n");
+			debug_printk("ok 4k page\n");
 		}
 	}
 	
@@ -254,12 +259,12 @@ static int printptetablefunc(void *data, u64 *val)
 	unsigned long l_pgd = 0;
 
 	mpgd_count = pgd_index(0xFFFFFFFF); 
-	printk(KERN_EMERG"mpgd_count = %d\n" , mpgd_count);
+	debug_printk(KERN_EMERG"mpgd_count = %d\n" , mpgd_count);
 	for(mpgd_index = 0 ; mpgd_index <= mpgd_count ; ++mpgd_index)
 	{
 		m_address = PGDIR_SIZE*mpgd_index;
 		pgd = pgd_offset(current->active_mm,m_address);
-		printk(KERN_EMERG"mpgd_index= %08d ,#%08lx pgd is %p ,*pgd = %08x , %08x\n" , mpgd_index,m_address , pgd , (*pgd)[0], (*pgd)[1]);
+		debug_printk(KERN_EMERG"mpgd_index= %08d ,#%08lx pgd is %p ,*pgd = %08x , %08x\n" , mpgd_index,m_address , pgd , (*pgd)[0], (*pgd)[1]);
 	}
 	for(mpgd_index = 0 ; mpgd_index <= mpgd_count ; ++mpgd_index)
 	{
@@ -268,35 +273,35 @@ static int printptetablefunc(void *data, u64 *val)
 		l_pgd = (*pgd)[0];
 		if(pgd_none(*pgd))
 		{
-			//printk(KERN_EMERG"#%08lx pgd is none\n" , m_address);
+			//debug_printk(KERN_EMERG"#%08lx pgd is none\n" , m_address);
 			continue;
 		}
 		else if((l_pgd&ARM_FIRST_LEVEL_MASK) == ARM_FIRST_LEVEL_1M)
 		{
-			printk("\n pgd = 0x%lx ,mpgd_index=%d , m_address=0x%lx\n", (unsigned long)pgd_val(*pgd) , mpgd_index , m_address);
-			printk(" %08lx-1M ", (unsigned long)(*pgd)[0]);
-			printk(" %08lx-1M ", (unsigned long)(*pgd)[1]);
-			printk("\n");
+			debug_printk("\n pgd = 0x%lx ,mpgd_index=%d , m_address=0x%lx\n", (unsigned long)pgd_val(*pgd) , mpgd_index , m_address);
+			debug_printk(" %08lx-1M ", (unsigned long)(*pgd)[0]);
+			debug_printk(" %08lx-1M ", (unsigned long)(*pgd)[1]);
+			debug_printk("\n");
 		}
 
 		else if((l_pgd&ARM_FIRST_LEVEL_MASK) == ARM_FIRST_LEVEL_1K_TABLE)
 		{
 			mpte_count = PMD_SIZE/PAGE_SIZE;
-			printk("\n pgd = 0x%lx ,mpgd_index=%d , m_address=0x%lx\n", (unsigned long)pgd_val(*pgd) , mpgd_index , m_address);
+			debug_printk("\n pgd = 0x%lx ,mpgd_index=%d , m_address=0x%lx\n", (unsigned long)pgd_val(*pgd) , mpgd_index , m_address);
 			for(mpte_index = 0 ; mpte_index < mpte_count ; ++mpte_index)
 			{
 				m_address = PGDIR_SIZE*mpgd_index+mpte_index*PAGE_SIZE;
 				pte = pte_offset_map((pmd_t*)pgd, m_address);
 				if(mpte_index % 16 == 0)
 				{
-					printk("\n"); 
+					debug_printk("\n"); 
 				}
 				if(mpte_index % 1024 == 0)
 				{
-					printk("\n"); 
+					debug_printk("\n"); 
 				}
 				pte_hw_arm = pte+PTRS_PER_PTE;
-				printk(" %08lx", (unsigned long)pte_val(*pte_hw_arm));
+				debug_printk(" %08lx", (unsigned long)pte_val(*pte_hw_arm));
 				pte_unmap(*pte);
 			}			
 		}
@@ -311,7 +316,7 @@ static int debugfs_set_reg(void *data, u64 val)
 	unsigned long vir_addr = address;
 	if(isaddressvalid(1 , vir_addr))
 	{
-		printk("val is 0x%llx , address = 08x%lx\n" , val , vir_addr);
+		debug_printk("val is 0x%llx , address = 08x%lx\n" , val , vir_addr);
 		*(u32 *)vir_addr = val;
 	}
 	return 0;
@@ -322,7 +327,7 @@ static int debugfs_get_reg(void *data, u64 *val)
 	if(isaddressvalid(1 , vir_addr))
 	{
 		*val = *(u32 *)vir_addr;
-		printk("val is 0x%llx , address = 0x%lx &test_array_buf=0x%p, size is 4096 bytes\n" , *val , vir_addr , &test_array_buf);
+		debug_printk("val is 0x%llx , address = 0x%lx &test_array_buf=0x%p, size is 4096 bytes\n" , *val , vir_addr , &test_array_buf);
 	}
 	else
 	{
@@ -340,18 +345,18 @@ static int printmemsfunc(void *data, u64 *val)
 	{
 		if(addr % 1024 == 0)
 		{
-			printk("\n");
+			debug_printk("\n");
 		}
 		if(addr % 4096 == 0)
 		{
-			printk("\n");
+			debug_printk("\n");
 		}
 		if(addr %16 == 0)
 		{
-			printk("\n");
-			printk("%08x: " , (u32)addr);
+			debug_printk("\n");
+			debug_printk("%08x: " , (u32)addr);
 		}
-		printk("%08x " , *(u32 *)addr);
+		debug_printk("%08x " , *(u32 *)addr);
 		addr += 4;
 	}
 	return 0;
@@ -402,15 +407,15 @@ static int phy_2_vir_func(void *data, u64 val)
 			if(l_pgd>>PGDIR_SHIFT== m_phy_address >> PGDIR_SHIFT)
 			{
 				phy_2_vir = m_address|(m_phy_address&(PGDIR_SIZE-1));
-				printk("\n");
-				printk("vir_addr = %08lx ,phy_addr = %08lx ,l_pgd=%08lx  " , m_address|(m_phy_address&(PGDIR_SIZE-1)) , m_phy_address ,l_pgd);
+				debug_printk("\n");
+				debug_printk("vir_addr = %08lx ,phy_addr = %08lx ,l_pgd=%08lx  " , m_address|(m_phy_address&(PGDIR_SIZE-1)) , m_phy_address ,l_pgd);
 			}	
 		}
 
 		else if((l_pgd&ARM_FIRST_LEVEL_MASK) == ARM_FIRST_LEVEL_1K_TABLE)
 		{
 			mpte_count = PMD_SIZE/PAGE_SIZE;
-			//printk("\n pmd = 0x%lx ,mpgd_index=%d , m_address=0x%lx\n", (unsigned long)pgd_val(*pgd) , mpgd_index , m_address);
+			//debug_printk("\n pmd = 0x%lx ,mpgd_index=%d , m_address=0x%lx\n", (unsigned long)pgd_val(*pgd) , mpgd_index , m_address);
 			for(mpte_index = 0 ; mpte_index < mpte_count ; ++mpte_index)
 			{
 				m_address = PGDIR_SIZE*mpgd_index+mpte_index*PAGE_SIZE;
@@ -418,9 +423,9 @@ static int phy_2_vir_func(void *data, u64 val)
 				if(pte_pfn(*pte) == m_phy_address >> PAGE_SHIFT && pte_present(*pte))
 				{
 					phy_2_vir = m_address|(m_phy_address&(PGDIR_SIZE-1));
-					printk("\n");
+					debug_printk("\n");
 					pte_hw_arm = pte+PTRS_PER_PTE;
-					printk("vir_addr = %08lx ,phy_addr = %08lx ,pte_hw_arm=%08lx  " , m_address|(m_phy_address&(PAGE_SIZE-1)) , m_phy_address ,(unsigned long)pte_val(*pte_hw_arm));
+					debug_printk("vir_addr = %08lx ,phy_addr = %08lx ,pte_hw_arm=%08lx  " , m_address|(m_phy_address&(PAGE_SIZE-1)) , m_phy_address ,(unsigned long)pte_val(*pte_hw_arm));
 				}
 				pte_unmap(*pte);
 			}			
@@ -439,27 +444,27 @@ void __iomem * remap_io_or_mem(phys_addr_t phy_addr_temp, unsigned long size)
 	struct page *first_page;
 	if(pfn_valid(__phys_to_pfn(phy_addr_temp)))
 	{
-		printk("map memory area, phy_addr_temp=0x%lx,size=0x%lx\n" , (unsigned long)phy_addr_temp, size);
+		debug_printk("map memory area, phy_addr_temp=0x%lx,size=0x%lx\n" , (unsigned long)phy_addr_temp, size);
 		//vir_address = mem_io_remap((phys_addr_t)phy_addr_temp , count);
 
 		first_page = phys_to_page(phy_addr_temp);
-		printk("first_page = 0x%p\n" , first_page);
+		debug_printk("first_page = 0x%p\n" , first_page);
 
 		vir_address = vmap(&first_page, (size+PAGE_SIZE)>>PAGE_SHIFT, VM_MAP, PAGE_KERNEL);
-		printk("vir_address = 0x%p\n" , vir_address);
+		debug_printk("vir_address = 0x%p\n" , vir_address);
 		vir_address = (void*)(((unsigned long)vir_address&PAGE_MASK)| (phy_addr_temp&~PAGE_MASK));
-		printk("last vir_address = 0x%p\n" , vir_address);
+		debug_printk("last vir_address = 0x%p\n" , vir_address);
 	}
 	else
 	{
-		printk("map io area\n");
+		debug_printk("map io area\n");
 		vir_address = ioremap((phys_addr_t)phy_addr_temp , size); 
 	}
 	if(vir_address == 0)
 	{
-		printk("error vir_base is null");
+		debug_printk("error vir_base is null");
 	}
-	printk("phy_addr = 0x%lx ,  vir_address = 0x%p" , (unsigned long)phy_addr_temp  , vir_address);
+	debug_printk("phy_addr = 0x%lx ,  vir_address = 0x%p" , (unsigned long)phy_addr_temp  , vir_address);
 	return vir_address;
 }
 
@@ -533,17 +538,17 @@ static int phy_printmemsfunc_real(phys_addr_t phy_address , unsigned long length
 	{
 		if((unsigned long)vir_address % 512 == 0)
 		{
-			printk("\n");
+			debug_printk("\n");
 		}
 		if((unsigned long)vir_address % 4096 == 0)
 		{
-			printk("vir_address=%p\n" , vir_address);
+			debug_printk("vir_address=%p\n" , vir_address);
 		}
 		if((unsigned long)vir_address %16 == 0)
 		{
-			printk("\n");
+			debug_printk("\n");
 		}
-		printk("%08x " , *(u32 *)vir_address);
+		debug_printk("%08x " , *(u32 *)vir_address);
 		vir_address += 4;
 	}
 	if(vir_address != NULL)
@@ -565,13 +570,13 @@ static int task_struct_addr_get_func(void *data, u64 *val)
 	struct task_struct *task = pid ? find_task_by_vpid(pid) : current;
 	if(task == 0)
 	{
-		printk(KERN_EMERG"can not find pid=%ld\n" , pid) ;
+		debug_printk(KERN_EMERG"can not find pid=%ld\n" , pid) ;
 		return 0;
 	}
-	printk(KERN_EMERG"pid = %d\n" , task->pid) ;
-	printk(KERN_EMERG"task = %p\n" , task) ;
-	printk(KERN_EMERG"real_cred = %p\n" , task->real_cred) ;
-	printk(KERN_EMERG"cred = %p\n" , task->cred) ;
+	debug_printk(KERN_EMERG"pid = %d\n" , task->pid) ;
+	debug_printk(KERN_EMERG"task = %p\n" , task) ;
+	debug_printk(KERN_EMERG"real_cred = %p\n" , task->real_cred) ;
+	debug_printk(KERN_EMERG"cred = %p\n" , task->cred) ;
 	*val = (u32)task;
 	return 0;
 }
@@ -599,6 +604,7 @@ DEFINE_SIMPLE_ATTRIBUTE(fops_task_struct_addr, task_struct_addr_get_func, 0, "0x
 static void init_debug_memfs(void)
 {
 	debug_mem_dir = debugfs_create_dir("debug_mem", NULL);
+	debugfs_create_x32("debug", S_IRWXUGO, debug_mem_dir,(u32 *)&debug);
 	debugfs_create_x32("address", S_IRWXUGO, debug_mem_dir,(u32 *)&address);
 	debugfs_create_file("value", 0777,debug_mem_dir, &value,&fops_reg);
 	debugfs_create_file("printptetable", 0777,debug_mem_dir, &printptetable,&fops_printptetable);
@@ -637,7 +643,7 @@ static void composite_command_context(void)
 	command_context = *(unsigned int*)vir_address_command;
 	command_context = command_context & ~(1<<20|0xf<<16|7<<5|0xf);
 	command_context = command_context|cpu_id_mrc_mcr<<20|cpu_id_crn<<16|cpu_id_opcode2<<5|cpu_id_crm;
-	printk("command_context = 0x%x \n" , command_context);
+	debug_printk("command_context = 0x%x \n" , command_context);
 }
 
 static int cpu_id_get(void *data, u64 *val)
@@ -662,7 +668,7 @@ static int cpu_id_get(void *data, u64 *val)
 		    : 				
 		    : "cc"
 		    );						
-	printk(KERN_EMERG"value = 0x%x\n" , value) ;
+	debug_printk(KERN_EMERG"value = 0x%x\n" , value) ;
 	*val = (u32)value;
 	return 0;
 }
@@ -699,7 +705,7 @@ static void dump_gpio_register(void)
 	
 	vir_address = remap_io_or_mem(MSM8916_GPIO_START,MSM8916_GPIO_LENGTH);
 	vir_address_int = (int __iomem *)vir_address;
-	printk(KERN_EMERG"%-4s%"
+	debug_printk(KERN_EMERG"%-4s%"
 		"-11s%-3s%-4s%-4s%-5s"
 		"%-11s%-2s%-2s"
 		"%-11s%-11s\n"
@@ -713,7 +719,7 @@ static void dump_gpio_register(void)
 		io_inout = *(vir_address_int + (index*0x1000+4)/4);
 		io_intr_cfg = *(vir_address_int + (index*0x1000+8)/4);
 		io_intr_status = *(vir_address_int + (index*0x1000+0xC)/4);
-		printk(KERN_EMERG"%-4d"
+		debug_printk(KERN_EMERG"%-4d"
 			"0x%-8x %-3s%-4d%-4d%-5s"
 			"0x%-8x %-2d%-2d"
 			"0x%-8x 0x%-8x\n" 
@@ -728,6 +734,19 @@ static void dump_gpio_register(void)
 #ifdef SUSPEND_RESUME_DEBUG
 #define SUSPEND_RESUME_COUNT 1024
 unsigned long int  suspend_resume_base_addr[SUSPEND_RESUME_COUNT*3];
+//suspend_resume_debug
+//bit[0]		dupm all ldo register[resume]
+//bit[1]		show ldo consumers[resume]
+//bit[2]		dump gpio registers[resume]
+//bit[3]		show all gpios info[resume]
+//bit[4]		dupm all ldo register[suspend]
+//bit[5]		show ldo consumers[suspend]
+//bit[6]		dump gpio registers[suspend]
+//bit[7]		show all gpios info[suspend]
+//bit[30]		exec resume set
+//bit[31]		exec suspend set
+
+unsigned long int suspend_resume_debug = 0;
 #ifdef SUSPEND_RESUME_DEBUG_DUMP_REGULATOR
 extern void reg_debug_consumers_show_all(void);
 extern void spmi_debug_dump_all_ldo(void);
@@ -736,57 +755,83 @@ extern void spmi_debug_dump_all_ldo(void);
 #ifdef SUSPEND_RESUME_DEBUG_DUMP_GPIO
 void gpio_debug_show_all(void);
 #endif
+static void print_current_time(char *annotation)
+{
+	struct timespec ts;
+	struct rtc_time tm;
 
-void suspend_last(void)
+	getnstimeofday(&ts);
+	rtc_time_to_tm(ts.tv_sec, &tm);
+	printk("PM: suspend %s %d-%02d-%02d %02d:%02d:%02d.%09lu UTC\n",
+		annotation, tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday,
+		tm.tm_hour, tm.tm_min, tm.tm_sec, ts.tv_nsec);
+}
+
+void after_dpm_suspend_start_callback(void)
 {
 	int i = 0;
 	unsigned long int *suspend_value=suspend_resume_base_addr+SUSPEND_RESUME_COUNT;
 	pr_err("wgz %s\n",__FUNCTION__);
-#ifdef SUSPEND_RESUME_DEBUG_DUMP_REGULATOR
-	reg_debug_consumers_show_all();
-	spmi_debug_dump_all_ldo();
-#endif
-#ifdef SUSPEND_RESUME_DEBUG_DUMP_GPIO
-	gpio_debug_show_all();
-	dump_gpio_register();
-#endif
-
-	for(i = 0 ; i < SUSPEND_RESUME_COUNT; ++i)
+	if(suspend_resume_debug&(1<<31))
 	{
-		if(suspend_resume_base_addr[i] != 0)
+		for(i = 0 ; i < SUSPEND_RESUME_COUNT; ++i)
 		{
-			//resume_value[i] = get_phy_value(suspend_resume_base_addr[i]);
-			set_phy_value(suspend_resume_base_addr[i],suspend_value[i]);
-			pr_err("suspend_resume_base_addr[i] = 0x%lx ,suspend_value[i] = 0x%lx\n" 
-				, suspend_resume_base_addr[i] , suspend_value[i]);
-			udelay(10);
+			if(suspend_resume_base_addr[i] != 0)
+			{
+				//resume_value[i] = get_phy_value(suspend_resume_base_addr[i]);
+				set_phy_value(suspend_resume_base_addr[i],suspend_value[i]);
+				pr_err("suspend_resume_base_addr[i] = 0x%lx ,suspend_value[i] = 0x%lx\n" 
+					, suspend_resume_base_addr[i] , suspend_value[i]);
+				udelay(10);
+			}
 		}
 	}
+
+	print_current_time("after_dpm_suspend_start_callback");
 	
 }
+
+void last_suspend_callback(void)
+{
+	pr_err("wgz %s\n",__FUNCTION__);
+#ifdef SUSPEND_RESUME_DEBUG_DUMP_REGULATOR
+	if(suspend_resume_debug&(1<<5))reg_debug_consumers_show_all();
+	if(suspend_resume_debug&(1<<4))spmi_debug_dump_all_ldo();
+#endif
+#ifdef SUSPEND_RESUME_DEBUG_DUMP_GPIO
+	if(suspend_resume_debug&(1<<7))gpio_debug_show_all();
+	if(suspend_resume_debug&(1<<6))dump_gpio_register();
+#endif
+	print_current_time("last_suspend_callback");
+	
+}
+
 
 void resume_first(void)
 {
 	int i = 0;
 	unsigned long int *resume_value=suspend_resume_base_addr+SUSPEND_RESUME_COUNT*2;
-	pr_err("wgz %s\n",__FUNCTION__);
+	printk("wgz %s\n",__FUNCTION__);
+	print_current_time("resume_first");
 #ifdef SUSPEND_RESUME_DEBUG_DUMP_REGULATOR
-	spmi_debug_dump_all_ldo();
-	reg_debug_consumers_show_all();
+	if(suspend_resume_debug&(1<<0))spmi_debug_dump_all_ldo();
+	if(suspend_resume_debug&(1<<1))reg_debug_consumers_show_all();
 #endif
 #ifdef SUSPEND_RESUME_DEBUG_DUMP_GPIO
-	dump_gpio_register();
-	gpio_debug_show_all();
+	if(suspend_resume_debug&(1<<2))dump_gpio_register();
+	if(suspend_resume_debug&(1<<3))gpio_debug_show_all();
 #endif
-
-	for(i = 0 ; i < SUSPEND_RESUME_COUNT; ++i)
+	if(suspend_resume_debug&(1<<30))
 	{
-		if(suspend_resume_base_addr[i] != 0)
+		for(i = 0 ; i < SUSPEND_RESUME_COUNT; ++i)
 		{
-			pr_err("suspend_resume_base_addr[i] = 0x%lx , resume_value[i] = 0x%lx \n" 
-				, suspend_resume_base_addr[i] , resume_value[i]);
-			set_phy_value(suspend_resume_base_addr[i],resume_value[i]);
-			udelay(10);
+			if(suspend_resume_base_addr[i] != 0)
+			{
+				pr_err("suspend_resume_base_addr[i] = 0x%lx , resume_value[i] = 0x%lx \n" 
+					, suspend_resume_base_addr[i] , resume_value[i]);
+				set_phy_value(suspend_resume_base_addr[i],resume_value[i]);
+				udelay(10);
+			}
 		}
 	}
 }
@@ -796,7 +841,8 @@ static int resume_suspend_set(void *data, u64 val)
 	*(u32*)data = (u32)val;
 	if(val == 0)
 	{
-		suspend_last();
+		after_dpm_suspend_start_callback();
+		last_suspend_callback();
 	}
 	else
 	{
@@ -816,10 +862,13 @@ static void init_suspend_resume_fs(void)
 	struct dentry *suspend_resume_dir = debugfs_create_dir("suspend_resume", debug_mem_dir);
 	debugfs_create_file("test", 0777,suspend_resume_dir, &suspend_resume_test,&fops_resume_suspend);
 	debugfs_create_x32("suspend_resume_addr", S_IRUGO, suspend_resume_dir,(u32 *)&suspend_resume_addr);
+	debugfs_create_x32("suspend_resume_debug", S_IRWXUGO, suspend_resume_dir,(u32 *)&suspend_resume_debug);
 }
 
 extern void (*last_step_for_suspend)(void)  ;
 extern void (*first_step_for_resume)(void) ;
+extern void (*after_dpm_suspend_start)(void) ;
+
 #endif
 static int __init debug_init(void)
 {
@@ -828,8 +877,9 @@ static int __init debug_init(void)
 	init_task_structfs();
 	init_cpu_info_structfs();
 #ifdef SUSPEND_RESUME_DEBUG
-	last_step_for_suspend = suspend_last;
+	after_dpm_suspend_start = after_dpm_suspend_start_callback;
 	first_step_for_resume = resume_first;
+	last_step_for_suspend = last_suspend_callback;
 	suspend_resume_addr= (unsigned int) &suspend_resume_base_addr;
 	init_suspend_resume_fs();
 #endif

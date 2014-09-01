@@ -170,9 +170,12 @@ void __attribute__ ((weak)) arch_suspend_enable_irqs(void)
 
 void (*last_step_for_suspend)(void) = 0 ;
 void (*first_step_for_resume)(void) = 0 ;
+void (*after_dpm_suspend_start)(void) = 0 ;
 
 EXPORT_SYMBOL_GPL(last_step_for_suspend);
 EXPORT_SYMBOL_GPL(first_step_for_resume);
+EXPORT_SYMBOL_GPL(after_dpm_suspend_start);
+
 
 
 
@@ -219,11 +222,10 @@ static int suspend_enter(suspend_state_t state, bool *wakeup)
 		goto Platform_wake;
 	}
 	
-		if(last_step_for_suspend != NULL)
+	if(last_step_for_suspend != NULL)
 	{
 		last_step_for_suspend();
 	}
-
 	error = disable_nonboot_cpus();
 	if (error || suspend_test(TEST_CPUS))
 		goto Enable_cpus;
@@ -286,6 +288,12 @@ int suspend_devices_and_enter(suspend_state_t state)
 	ftrace_stop();
 	suspend_test_start();
 	error = dpm_suspend_start(PMSG_SUSPEND);
+
+	if(after_dpm_suspend_start != NULL)
+	{
+		after_dpm_suspend_start();
+	}
+	
 	if (error) {
 		printk(KERN_ERR "PM: Some devices failed to suspend\n");
 		goto Recover_platform;

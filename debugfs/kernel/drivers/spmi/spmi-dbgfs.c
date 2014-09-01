@@ -653,7 +653,7 @@ static void spmi_debug_dump_one_ldo(struct spmi_trans *trans)
 	}
 	else
 	{
-		snprintf( mode_enable, 10 ,"%s", &log->data[16*5*4+5*5]);
+		snprintf( mode_enable, 6 ,"%s", &log->data[(16*3+6)*4+(6+5*3)]);
 		printk(KERN_CRIT"%s",mode_enable);
 		printk(KERN_CRIT"%s",&log->data[log->rpos]);
 	}
@@ -677,6 +677,7 @@ void spmi_debug_dump_all_ldo(void)
 		trans.ctrl = spmi_debug_ctrl;
 		trans.addr = 0x14000+0x100*i;
 		trans.offset = trans.addr;
+		trans.raw_data = 0;
 		printk(KERN_EMERG"-------------------------------dump spmi LDO[%d] REG_ADDR=0x%x----------\n",i+1 , trans.addr);
 		spmi_debug_dump_one_ldo(&trans);
 		printk(KERN_EMERG"---------------------------------------------------------------------------\n\n");
