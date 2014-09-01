@@ -227,7 +227,7 @@ function battery_only()
 {
 	echo 0 > /sys/class/power_supply/battery/charging_enabled;
 	pmic_reg 0x1049 1;
-	echo 'file qpnp-adc-common.c +p' > /data/debugfs/dynamic_debug/control
+	echo 'file qpnp-adc-common.c +p' > /d/dynamic_debug/control
 }
 
 

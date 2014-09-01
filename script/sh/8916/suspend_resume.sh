@@ -88,6 +88,19 @@ function suspend_resume_test()
 	echo $1 > $suspend_resume_test;
 }
 
+function suspend_resume_debug_mask()
+{
+	if(($#<1))
+	then
+		mask_value=`cat $suspend_resume_debug_path`;
+		echo "value:$mask_value";
+	else
+		echo $1 > $suspend_resume_debug_path;
+	fi
+}
+
+
+
 
 function base_help()
 {
@@ -96,6 +109,18 @@ function base_help()
 	echo "set_ldo_suspend_resume ldo_num suspend_value resume_value (0 disable 0x80 enable)"
 	echo "reset_suspend_resume reset it"
 	echo "suspend_resume_test value (0 for suspend , 1 for resume)"
+#suspend_resume_debug
+#bit[0]		dupm all ldo register[resume]
+#bit[1]		show ldo consumers[resume]
+#bit[2]		dump gpio registers[resume]
+#bit[3]		show all gpios info[resume]
+#bit[4]		dupm all ldo register[suspend]
+#bit[5]		show ldo consumers[suspend]
+#bit[6]		dump gpio registers[suspend]
+#bit[7]		show all gpios info[suspend]
+#bit[30]	exec resume set
+#bit[31]	exec suspend set
+	echo "suspend_resume_debug_mask (-value)"
 	echo "----------------------------------------------------------------------------------------";
 }
 

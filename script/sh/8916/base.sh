@@ -1,4 +1,3 @@
-
 vir_value_path="/d/debug_mem/value";
 vir_addr_path="/d/debug_mem/address";
 phy_value_path="/d/debug_mem/phy_value";
@@ -9,6 +8,7 @@ vir_2_phy="/d/debug_mem/vir_2_phy";
 phy_2_vir="/d/debug_mem/phy_2_vir";
 suspend_resume_addr="/d/debug_mem/suspend_resume/suspend_resume_addr";
 suspend_resume_test="/d/debug_mem/suspend_resume/test";
+suspend_resume_debug_path="/d/debug_mem/suspend_resume/suspend_resume_debug";
 
 function set_value_addr()
 {
@@ -105,48 +105,56 @@ function while_function_base()
 }
 
 #$1 is the index
-write_vir_format_value_one()
+function write_vir_format_value_one()
 {
 	vir_value_set ${parameter_format_vir_address_array[$1]} ${parameter_format_vir_value_array[$1]} 
 }
 
-read_vir_format_value_one()
+function read_vir_format_value_one()
 {
 	vir_value_get ${parameter_format_vir_address_array[$1]};
 	parameter_format_vir_read_array[$1]=vir_value_get_returned;
 }
 
 #$1 is the index
-write_io_format_value_one()
+function write_io_format_value_one()
 {
 	io_value_set ${parameter_format_io_address_array[$1]} ${parameter_format_io_value_array[$1]} 
 }
 
-read_io_format_value_one()
+function read_io_format_value_one()
 {
 	io_value_get ${parameter_format_io_address_array[$1]};
 	parameter_format_io_read_array[$1]=$io_value_get_returned;
 }
 
-write_vir_format_value_all()
+function write_vir_format_value_all()
 {
 	while_function_base $parameter_format_vir_count write_vir_format_value_one
 }
 
-read_vir_format_value_all()
+function read_vir_format_value_all()
 {
 	while_function_base $parameter_format_vir_count read_vir_format_value_one
 }
 
-write_io_format_value_all()
+function write_io_format_value_all()
 {
 	while_function_base $parameter_format_io_count write_io_format_value_one
 }
 
-read_io_format_value_all()
+function read_io_format_value_all()
 {
 	while_function_base $parameter_format_io_count read_io_format_value_one
 }
+
+function print_console_all()
+{
+	echo 1 > /sys/module/printk/parameters/ignore_loglevel;
+	echo 0 > /sys/module/printk/parameters/console_suspend;
+}
+
+
 
 
 function base_help()
