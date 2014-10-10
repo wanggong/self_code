@@ -16,53 +16,65 @@ phy_index=0;
 gpio_value_addr=0xFD511004;
 GPIO_HIGH=2;
 GPIO_LOW=0;
-function set_gpio_suspend_resume()
+function suspend_resume_init()
+{
+	let phy_index=0;
+	while [ 1 ]
+	do
+		let address=$phy_address+$phy_index*4;
+		vir_value_get $address;
+		if(($vir_value_get_returned>0))
+		then	
+			let phy_index=$phy_index+1;
+		else
+			break;
+		fi
+	done
+	#echo "after suspend_resume_init phy_index $phy_index";
+}
+
+function set_io_value_suspend_resume()
 {
 	let address=$phy_address+$phy_index*4;
-	get_gpio_value_addr $1;
-	let gpio_phy_address=$get_gpio_value_addr_returned;
-	vir_value $address $gpio_phy_address;
+	vir_value $address $1;
 	
+	let io_suspend_value_address=$suspend_value_address+$phy_index*4;
+	vir_value $io_suspend_value_address $2;
 	
-	let gpio_suspend_value_address=$suspend_value_address+$phy_index*4;
-	vir_value $gpio_suspend_value_address $2;
-	
-	let gpio_resume_value_address=$resume_value_address+$phy_index*4;
-	vir_value $gpio_resume_value_address $3;
+	let io_resume_value_address=$resume_value_address+$phy_index*4;
+	vir_value $io_resume_value_address $3;
 	
 	let phy_index=$phy_index+1;
 	
+}
+
+
+function set_gpio_suspend_resume()
+{
+	get_gpio_value_addr $1;
+	let gpio_phy_address=$get_gpio_value_addr_returned;
+	set_io_value_suspend_resume $gpio_phy_address $2 $3;
+}
+
+function set_pimc_reg_suspend_resume()
+{
+
+#write suspend resume value
+	pmic_update_write_array $1 $2;
+	set_io_value_suspend_resume ${parameter_format_io_address_array[0]} $2 $3
+
+#write command 
+	let pmic_command=${parameter_format_io_value_array[1]};
+	set_io_value_suspend_resume ${parameter_format_io_address_array[1]} $pmic_command $pmic_command
+
+	let parameter_format_io_count=0;
 }
 
 function set_ldo_suspend_resume()
 {
 	get_ldo_enable_address $1;
 	ldo_enable_address=$get_ldo_enable_address_returned;
-	pmic_update_write_array $ldo_enable_address $2;
-
-	let address=$phy_address+$phy_index*4;
-	vir_value $address ${parameter_format_io_address_array[0]};
-
-	let pmic_suspend_value_address=$suspend_value_address+$phy_index*4;
-	vir_value $pmic_suspend_value_address $2;
-
-	let pmic_resume_value_address=$resume_value_address+$phy_index*4;
-	vir_value $pmic_resume_value_address $3;
-
-	let phy_index=$phy_index+1;
-
-	let command_address=$phy_address+$phy_index*4;
-	vir_value $command_address ${parameter_format_io_address_array[1]};
-
-	let pmic_command=${parameter_format_io_value_array[1]};
-	let pmic_suspend_command_address=$suspend_value_address+$phy_index*4;
-	vir_value $pmic_suspend_command_address $pmic_command;
-
-	let pmic_resume_command_address=$resume_value_address+$phy_index*4;
-	vir_value $pmic_resume_command_address $pmic_command;
-
-	let phy_index=$phy_index+1;
-	let parameter_format_io_count=0;
+	set_pimc_reg_suspend_resume $ldo_enable_address $2 $3;
 }
 
 
@@ -103,25 +115,21 @@ function suspend_resume_debug_mask()
 
 
 function base_help()
-{
+{	
 	echo "----------------------------SUSPEND_RESUME----------------------------------------------";
+	echo "set_io_value_suspend_resume io_address suspend_value resume_value"
 	echo "set_gpio_suspend_resume gpio_num suspend_value resume_value (0 LOW, 2 HIGH)"
+	echo "set_pimc_reg_suspend_resume ldo_num suspend_value resume_value"
 	echo "set_ldo_suspend_resume ldo_num suspend_value resume_value (0 disable 0x80 enable)"
 	echo "reset_suspend_resume reset it"
 	echo "suspend_resume_test value (0 for suspend , 1 for resume)"
 #suspend_resume_debug
-#bit[0]		dupm all ldo register[resume]
-#bit[1]		show ldo consumers[resume]
-#bit[2]		dump gpio registers[resume]
-#bit[3]		show all gpios info[resume]
-#bit[4]		dupm all ldo register[suspend]
-#bit[5]		show ldo consumers[suspend]
-#bit[6]		dump gpio registers[suspend]
-#bit[7]		show all gpios info[suspend]
-#bit[30]	exec resume set
-#bit[31]	exec suspend set
+#bit[0]		dupm all ldo status
+#bit[1]		dupm gpio ldo status
+#bit[2]		dump interrupt registers
+#bit[31]	exec command set
 	echo "suspend_resume_debug_mask (-value)"
 	echo "----------------------------------------------------------------------------------------";
 }
-
+suspend_resume_init
 base_help

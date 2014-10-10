@@ -148,10 +148,19 @@ function read_io_format_value_all()
 	while_function_base $parameter_format_io_count read_io_format_value_one
 }
 
-function print_console_all()
+function ignore_loglevel()
 {
-	echo 1 > /sys/module/printk/parameters/ignore_loglevel;
-	echo 0 > /sys/module/printk/parameters/console_suspend;
+	echo $1 > /sys/module/printk/parameters/ignore_loglevel;
+}
+
+function console_suspend()
+{
+	echo $1 > /sys/module/printk/parameters/console_suspend;
+}
+
+function debug_clks()
+{
+	echo $1 > /d/clk/debug_suspend;
 }
 
 
@@ -164,7 +173,13 @@ function base_help()
 	echo "io_value address (-value)";
 	echo "vir_to_phy value (convert virtual to phy)"
 	echo "phy_to_vir value (convert phy to virtual)"
+	echo "ignore_loglevel (1 ignore , 0 not ignore)"
+	echo "console_suspend (1 suspend , 0 not suspend)"
+	echo "debug_clks -value (1 enable 0 disable)"
 	echo "--------------------------------------------";
 }
 
 base_help
+ignore_loglevel 1
+
+

@@ -170,10 +170,16 @@ void __attribute__ ((weak)) arch_suspend_enable_irqs(void)
 
 void (*last_step_for_suspend)(void) = 0 ;
 void (*first_step_for_resume)(void) = 0 ;
+void (*resume_before_irq_enable)(void) = 0 ;
+void (*suspend_after_irq_disable)(void) = 0 ;
 void (*after_dpm_suspend_start)(void) = 0 ;
+
+
 
 EXPORT_SYMBOL_GPL(last_step_for_suspend);
 EXPORT_SYMBOL_GPL(first_step_for_resume);
+EXPORT_SYMBOL_GPL(resume_before_irq_enable);
+EXPORT_SYMBOL_GPL(suspend_after_irq_disable);
 EXPORT_SYMBOL_GPL(after_dpm_suspend_start);
 
 
@@ -233,6 +239,11 @@ static int suspend_enter(suspend_state_t state, bool *wakeup)
 	arch_suspend_disable_irqs();
 	BUG_ON(!irqs_disabled());
 
+	if(suspend_after_irq_disable != NULL)
+	{
+		suspend_after_irq_disable();
+	}
+	
 	error = syscore_suspend();
 	if (!error) {
 		*wakeup = pm_wakeup_pending();
@@ -241,6 +252,11 @@ static int suspend_enter(suspend_state_t state, bool *wakeup)
 			events_check_enabled = false;
 		}
 		syscore_resume();
+	}
+
+	if(resume_before_irq_enable != NULL)
+	{
+		resume_before_irq_enable();
 	}
 
 	arch_suspend_enable_irqs();

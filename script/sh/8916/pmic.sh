@@ -223,6 +223,13 @@ function pmic_reg()
 	fi
 }
 
+function power_key_dl()
+{
+	pmic_reg 0x840 0;
+	pmic_reg 0x841 0;
+	pmic_reg 0x842 1;
+}
+
 function battery_only()
 {
 	echo 0 > /sys/class/power_supply/battery/charging_enabled;
@@ -348,6 +355,7 @@ function help_pmic()
 	echo "pmic_reg (reg_addr -value) read or write pmic reg";
 	echo "ldo_enable (reg_addr -value) read or write ldo enable reg";
 	echo "ldo_mode (reg_addr -value) read or write ldo mode reg";
+	echo "power_key_dl press power key ,enter download mode immediately"
 	echo "ldo_status_all print all ldo status";
 	echo " battery_only set battery only , not use usb power";
 	echo "----------------------------------------------------------";

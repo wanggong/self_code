@@ -1,7 +1,8 @@
 #!/usr/bin/perl
+
 sub main()
 {
-		$linked_shard_library_dir="/home/wanggongzhen/project/8916/out/target/product/msm8916_32_512/obj/SHARED_LIBRARIES";
+		$linked_shard_library_dir="/home/wanggongzhen/projects/lenovo/android/out/target/product/wt86518_A1/obj/SHARED_LIBRARIES";
 		$input_file=$ARGV[0];
         open(OPENFILE , $input_file);
         open(SAVEFILE ,">", "$input_file.log");

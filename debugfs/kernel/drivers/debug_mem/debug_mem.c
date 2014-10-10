@@ -43,6 +43,17 @@
 
 #define debug_printk(format, arg...) do{if(debug&1){printk(format, ##arg);}}while(0)
 
+extern void (*last_step_for_suspend)(void)  ;
+extern void (*first_step_for_resume)(void) ;
+extern void (*resume_before_irq_enable)(void);
+extern void (*suspend_after_irq_disable)(void);
+extern void (*after_dpm_suspend_start)(void) ;
+extern void (*resume_before_gic_irq_resume)(void) ;
+extern void (*suspend_after_gic_irq_suspend)(void);
+extern void (*resume_before_msm_tlmm_v4_gp_irq_resume)(void) ;
+extern void (*suspend_after_msm_tlmm_v4_gp_irq_suspend)(void) ;
+
+extern int debug_qpnpint_show_resume_irq;
 
 
 
@@ -702,10 +713,21 @@ static void dump_gpio_register(void)
 	unsigned int io_intr_cfg = 0;
 	unsigned int io_intr_status = 0;
 	static char *pull_str[4] = {"NO","DOWN","KEEP","UP"};
+	unsigned int wake_enable0 = 0;
+	unsigned int wake_enable1 = 0;
+	static int wake_enable0_gpio_index[32] = {115,114,113,112,111,110,109,108
+									   ,107,98 ,97 ,69 ,62 ,54 ,52 ,51
+									   ,50 ,49 ,38 ,37 ,36 ,35 ,34 ,31
+									   ,28 ,25 ,21 ,20 ,13 ,12 ,5  ,1};
+	static int wake_enable1_gpio_index[32] = {777,777,777,777,777,777,777,777
+									   ,777,777,777,777,777,777,777,777
+									   ,777,777,777,68 ,66 ,205,204 ,203
+									   ,202,201,121,120,9  ,118,117,11};
+
 	
 	vir_address = remap_io_or_mem(MSM8916_GPIO_START,MSM8916_GPIO_LENGTH);
 	vir_address_int = (int __iomem *)vir_address;
-	debug_printk(KERN_EMERG"%-4s%"
+	printk(KERN_EMERG"%-4s%"
 		"-11s%-3s%-4s%-4s%-5s"
 		"%-11s%-2s%-2s"
 		"%-11s%-11s\n"
@@ -719,7 +741,7 @@ static void dump_gpio_register(void)
 		io_inout = *(vir_address_int + (index*0x1000+4)/4);
 		io_intr_cfg = *(vir_address_int + (index*0x1000+8)/4);
 		io_intr_status = *(vir_address_int + (index*0x1000+0xC)/4);
-		debug_printk(KERN_EMERG"%-4d"
+		printk(KERN_EMERG"%-4d"
 			"0x%-8x %-3s%-4d%-4d%-5s"
 			"0x%-8x %-2d%-2d"
 			"0x%-8x 0x%-8x\n" 
@@ -728,6 +750,23 @@ static void dump_gpio_register(void)
 			,io_inout,io_inout&2,io_inout&1
 			, io_intr_cfg,io_intr_status) ;
 	}
+	wake_enable0 = *(vir_address_int + 0x100008/4);
+	wake_enable1 = *(vir_address_int + 0x10000C/4);
+	printk(KERN_EMERG"-------------WAKEUP_GPIO-------------------");
+	printk(KERN_EMERG"0x%x  0x%x\n" , wake_enable0,wake_enable1);
+	printk(KERN_EMERG"wakeup gpio:");
+	for(index = 0 ; index < 32 ; index ++)
+	{
+		if(wake_enable0&(1<<index))
+		{
+			printk(" %d " , wake_enable0_gpio_index[31-index]);
+		}
+		if(wake_enable1&(1<<index))
+		{
+			printk(" %d " , wake_enable1_gpio_index[31-index]);
+		}
+	}
+	printk("\n");
 }
 
 
@@ -735,16 +774,10 @@ static void dump_gpio_register(void)
 #define SUSPEND_RESUME_COUNT 1024
 unsigned long int  suspend_resume_base_addr[SUSPEND_RESUME_COUNT*3];
 //suspend_resume_debug
-//bit[0]		dupm all ldo register[resume]
-//bit[1]		show ldo consumers[resume]
-//bit[2]		dump gpio registers[resume]
-//bit[3]		show all gpios info[resume]
-//bit[4]		dupm all ldo register[suspend]
-//bit[5]		show ldo consumers[suspend]
-//bit[6]		dump gpio registers[suspend]
-//bit[7]		show all gpios info[suspend]
-//bit[30]		exec resume set
-//bit[31]		exec suspend set
+//bit[0]		dupm all ldo status
+//bit[1]		dump gpio status
+//bit[2]		dump interrupts
+//bit[31]		exec command set
 
 unsigned long int suspend_resume_debug = 0;
 #ifdef SUSPEND_RESUME_DEBUG_DUMP_REGULATOR
@@ -786,6 +819,10 @@ void after_dpm_suspend_start_callback(void)
 			}
 		}
 	}
+	if(suspend_resume_debug&(1<<2))
+	{
+		debug_qpnpint_show_resume_irq = 1;
+	}
 
 	print_current_time("after_dpm_suspend_start_callback");
 	
@@ -793,14 +830,14 @@ void after_dpm_suspend_start_callback(void)
 
 void last_suspend_callback(void)
 {
-	pr_err("wgz %s\n",__FUNCTION__);
+	debug_printk("wgz %s\n",__FUNCTION__);
 #ifdef SUSPEND_RESUME_DEBUG_DUMP_REGULATOR
-	if(suspend_resume_debug&(1<<5))reg_debug_consumers_show_all();
-	if(suspend_resume_debug&(1<<4))spmi_debug_dump_all_ldo();
+	if(suspend_resume_debug&(1<<0))reg_debug_consumers_show_all();
+	if(suspend_resume_debug&(1<<0))spmi_debug_dump_all_ldo();
 #endif
 #ifdef SUSPEND_RESUME_DEBUG_DUMP_GPIO
-	if(suspend_resume_debug&(1<<7))gpio_debug_show_all();
-	if(suspend_resume_debug&(1<<6))dump_gpio_register();
+	if(suspend_resume_debug&(1<<1))gpio_debug_show_all();
+	if(suspend_resume_debug&(1<<1))dump_gpio_register();
 #endif
 	print_current_time("last_suspend_callback");
 	
@@ -811,23 +848,23 @@ void resume_first(void)
 {
 	int i = 0;
 	unsigned long int *resume_value=suspend_resume_base_addr+SUSPEND_RESUME_COUNT*2;
-	printk("wgz %s\n",__FUNCTION__);
+	debug_printk("wgz %s\n",__FUNCTION__);
 	print_current_time("resume_first");
 #ifdef SUSPEND_RESUME_DEBUG_DUMP_REGULATOR
 	if(suspend_resume_debug&(1<<0))spmi_debug_dump_all_ldo();
-	if(suspend_resume_debug&(1<<1))reg_debug_consumers_show_all();
+	if(suspend_resume_debug&(1<<0))reg_debug_consumers_show_all();
 #endif
 #ifdef SUSPEND_RESUME_DEBUG_DUMP_GPIO
-	if(suspend_resume_debug&(1<<2))dump_gpio_register();
-	if(suspend_resume_debug&(1<<3))gpio_debug_show_all();
+	if(suspend_resume_debug&(1<<1))dump_gpio_register();
+	if(suspend_resume_debug&(1<<1))gpio_debug_show_all();
 #endif
-	if(suspend_resume_debug&(1<<30))
+	if(suspend_resume_debug&(1<<31))
 	{
 		for(i = 0 ; i < SUSPEND_RESUME_COUNT; ++i)
 		{
 			if(suspend_resume_base_addr[i] != 0)
 			{
-				pr_err("suspend_resume_base_addr[i] = 0x%lx , resume_value[i] = 0x%lx \n" 
+				debug_printk("suspend_resume_base_addr[i] = 0x%lx , resume_value[i] = 0x%lx \n" 
 					, suspend_resume_base_addr[i] , resume_value[i]);
 				set_phy_value(suspend_resume_base_addr[i],resume_value[i]);
 				udelay(10);
@@ -835,6 +872,45 @@ void resume_first(void)
 		}
 	}
 }
+
+extern void debugfs_dump_gic(void);
+void resume_before_irq_enabled(void)
+{
+	//debugfs_dump_gic();
+}
+
+void suspend_after_irq_disabled(void)
+{
+	//debugfs_dump_gic();
+}
+
+void suspend_after_gic_irq_suspended(void)
+{
+	//debugfs_dump_gic();
+}
+
+void resume_before_gic_irq_resumed(void)
+{
+	if(suspend_resume_debug&(1<<2))debugfs_dump_gic();
+}
+
+void suspend_after_msm_tlmm_v4_gp_irq_suspended(void)
+{
+
+}
+
+extern void debugfs_msm_tlmm_v4_gp_irq_show(void) ;
+
+void resume_before_msm_tlmm_v4_gp_irq_resumed(void)
+{
+	if(suspend_resume_debug&(1<<2))
+	{
+		debugfs_msm_tlmm_v4_gp_irq_show();
+	}
+}
+
+
+
 
 static int resume_suspend_set(void *data, u64 val)
 {
@@ -846,6 +922,8 @@ static int resume_suspend_set(void *data, u64 val)
 	}
 	else
 	{
+		resume_before_msm_tlmm_v4_gp_irq_resumed();
+		resume_before_gic_irq_resumed();
 		resume_first();
 	}
 	return 0;
@@ -865,10 +943,6 @@ static void init_suspend_resume_fs(void)
 	debugfs_create_x32("suspend_resume_debug", S_IRWXUGO, suspend_resume_dir,(u32 *)&suspend_resume_debug);
 }
 
-extern void (*last_step_for_suspend)(void)  ;
-extern void (*first_step_for_resume)(void) ;
-extern void (*after_dpm_suspend_start)(void) ;
-
 #endif
 static int __init debug_init(void)
 {
@@ -879,8 +953,15 @@ static int __init debug_init(void)
 #ifdef SUSPEND_RESUME_DEBUG
 	after_dpm_suspend_start = after_dpm_suspend_start_callback;
 	first_step_for_resume = resume_first;
+	resume_before_irq_enable = resume_before_irq_enabled;
+	suspend_after_irq_disable = suspend_after_irq_disabled;
 	last_step_for_suspend = last_suspend_callback;
 	suspend_resume_addr= (unsigned int) &suspend_resume_base_addr;
+	resume_before_gic_irq_resume = resume_before_gic_irq_resumed;
+	suspend_after_gic_irq_suspend = suspend_after_gic_irq_suspended;
+	resume_before_msm_tlmm_v4_gp_irq_resume = resume_before_msm_tlmm_v4_gp_irq_resumed;
+	suspend_after_msm_tlmm_v4_gp_irq_suspend = suspend_after_msm_tlmm_v4_gp_irq_suspended;
+	
 	init_suspend_resume_fs();
 #endif
 	return 0;

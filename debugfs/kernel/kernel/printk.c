@@ -926,7 +926,7 @@ void __init setup_log_buf(int early)
 		free, (free * 100) / __LOG_BUF_LEN);
 }
 
-static bool __read_mostly ignore_loglevel;
+static bool __read_mostly ignore_loglevel = 1;
 
 static int __init ignore_loglevel_setup(char *str)
 {
@@ -2141,7 +2141,7 @@ int update_console_cmdline(char *name, int idx, char *name_new, int idx_new, cha
 	return -1;
 }
 
-bool console_suspend_enabled = 1;
+bool console_suspend_enabled = 0;
 EXPORT_SYMBOL(console_suspend_enabled);
 
 static int __init console_suspend_disable(char *str)
