@@ -348,6 +348,23 @@ function ldo_status_all()
 	done
 }
 
+function rtc_time()
+{
+	pimc_reg 0x604B;
+	pimc_reg 0x604A;
+	pimc_reg 0x6049;
+	pimc_reg 0x6048;
+}
+
+function alarm_time()
+{
+	pimc_reg 0x6143;
+	pimc_reg 0x6142;
+	pimc_reg 0x6141;
+	pimc_reg 0x6140;
+}
+
+
 
 function help_pmic()
 {
@@ -358,6 +375,8 @@ function help_pmic()
 	echo "power_key_dl press power key ,enter download mode immediately"
 	echo "ldo_status_all print all ldo status";
 	echo " battery_only set battery only , not use usb power";
+	echo " rtc_time show rtc register(seconds)";
+	echo " alarm_time show alarm register(seconds)";
 	echo "----------------------------------------------------------";
 }
 get_channel_config;

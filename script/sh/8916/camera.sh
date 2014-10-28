@@ -134,7 +134,7 @@ function help()
 	echo "setprop persist.camera.thermal.mode frameskip	(frameskip or fps default:frameskip)"
 	echo "setprop persist.camera.opt.livepic 1		(1:enable 0:disable defualt:1)"
 	echo "setprop persist.camera.stats.opt.mask 1     	(1|2|4|8|16 defualt:0)"
-	echo "setprop persist.camera.stats.debug.mask 1     	()"
+	echo "setprop persist.camera.stats.debug.mask 1     	(1:AEC 2:awb 4:AF 8:ASD 0x10:AFD)"
 	echo "setprop persist.camera.ISP.debug.mask 1 		()"
 	echo "setprop persist.camera.auto.hdr.enable enable 	(enable or disable)"
 	echo "setprop persist.capture.burst.exposures ""	(defualt:"")"

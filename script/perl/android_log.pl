@@ -23,7 +23,7 @@ sub main()
 					$full_lib_name=`$find_full_lib_name_cmd`;
 					#printf(SAVEFILE "%s\n" , $full_lib_name);
 					$addr_to_line_cmd="arm-linux-androideabi-addr2line $address -a -i -p -s -f -C -e $full_lib_name ";
-					#printf(SAVEFILE "%s\n" , $addr_to_line);
+					#printf(SAVEFILE "%s\n" , $addr_to_line_cmd);
 					$line_func_file=`$addr_to_line_cmd`;
 					printf(SAVEFILE "%s\n" , $line_func_file);
 					

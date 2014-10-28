@@ -9,6 +9,9 @@ phy_2_vir="/d/debug_mem/phy_2_vir";
 suspend_resume_addr="/d/debug_mem/suspend_resume/suspend_resume_addr";
 suspend_resume_test="/d/debug_mem/suspend_resume/test";
 suspend_resume_debug_path="/d/debug_mem/suspend_resume/suspend_resume_debug";
+thread_info_thread_info_path="/d/debug_mem/thread/thread_info";
+thread_info_print_seconds_path="/d/debug_mem/thread/print_seconds";
+thread_info_schedule_seconds_path="/d/debug_mem/thread/schedule_seconds";
 
 function set_value_addr()
 {

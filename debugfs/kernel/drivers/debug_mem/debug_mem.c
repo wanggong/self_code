@@ -17,6 +17,7 @@
 #include <linux/debugfs.h>
 #include <asm/uaccess.h>
 #include <linux/rtc.h>
+#include <linux/freezer.h>
 
 
 
@@ -52,8 +53,7 @@ extern void (*resume_before_gic_irq_resume)(void) ;
 extern void (*suspend_after_gic_irq_suspend)(void);
 extern void (*resume_before_msm_tlmm_v4_gp_irq_resume)(void) ;
 extern void (*suspend_after_msm_tlmm_v4_gp_irq_suspend)(void) ;
-
-extern int debug_qpnpint_show_resume_irq;
+extern void (*before_spmi_pmic_arb_resume)(void);
 
 
 
@@ -819,11 +819,6 @@ void after_dpm_suspend_start_callback(void)
 			}
 		}
 	}
-	if(suspend_resume_debug&(1<<2))
-	{
-		debug_qpnpint_show_resume_irq = 1;
-	}
-
 	print_current_time("after_dpm_suspend_start_callback");
 	
 }
@@ -909,6 +904,17 @@ void resume_before_msm_tlmm_v4_gp_irq_resumed(void)
 	}
 }
 
+extern void debugfs_spmi_pmic_arb_resume(void);
+void before_spmi_pmic_arb_resumed(void)
+{
+	if(suspend_resume_debug&(1<<2))
+	{
+		debugfs_spmi_pmic_arb_resume();
+	}
+
+}
+
+
 
 
 
@@ -943,27 +949,157 @@ static void init_suspend_resume_fs(void)
 	debugfs_create_x32("suspend_resume_debug", S_IRWXUGO, suspend_resume_dir,(u32 *)&suspend_resume_debug);
 }
 
+static void init_suspend_resume(void)
+{
+
+		after_dpm_suspend_start = after_dpm_suspend_start_callback;
+		first_step_for_resume = resume_first;
+		resume_before_irq_enable = resume_before_irq_enabled;
+		suspend_after_irq_disable = suspend_after_irq_disabled;
+		last_step_for_suspend = last_suspend_callback;
+		suspend_resume_addr= (unsigned int) &suspend_resume_base_addr;
+		resume_before_gic_irq_resume = resume_before_gic_irq_resumed;
+		suspend_after_gic_irq_suspend = suspend_after_gic_irq_suspended;
+		resume_before_msm_tlmm_v4_gp_irq_resume = resume_before_msm_tlmm_v4_gp_irq_resumed;
+		suspend_after_msm_tlmm_v4_gp_irq_suspend = suspend_after_msm_tlmm_v4_gp_irq_suspended;
+		before_spmi_pmic_arb_resume = before_spmi_pmic_arb_resumed;
+		init_suspend_resume_fs();
+}
+#else
+static void init_suspend_resume(void)
+{
+}
 #endif
+
+
+/**********************************Thread**********************************************/
+#define DEBUG_THREAD_MONITOR
+#ifdef DEBUG_THREAD_MONITOR
+static void thread_debug_work_func(struct work_struct *work);
+struct workqueue_struct *thread_debug_wq;
+static DECLARE_DELAYED_WORK(thread_debug_work, thread_debug_work_func);
+
+static unsigned int print_seconds = 30;
+static unsigned int schedule_seconds = 15;
+static char print_thread_name[512] = {0};
+
+static void thread_debug_work_func(struct work_struct *work)
+{
+	struct task_struct *g, *p;
+	int monitor_kernel = !!strstr(print_thread_name,"kernel");
+	freezer_do_not_count();
+	for_each_process(g)
+	{
+		p = g;
+		if(p == current)
+		{
+			continue;
+		}
+		if(frozen(p))
+		{
+			continue;
+		}
+		if((p->flags&PF_KTHREAD))
+		{
+			if(!monitor_kernel)
+			{
+				continue;
+			}
+		}
+		else
+		{
+			if(!strstr(print_thread_name,p->comm))
+			{
+				continue;
+			}
+		}
+		
+		//task_lock(g);
+		do 
+		{
+			if(p->last_schedule_jiffies == p->last_check_jiffies)
+			{
+				continue;
+			}
+			if(time_after(jiffies,p->last_schedule_jiffies + print_seconds*HZ))
+			{
+				p->last_check_jiffies = p->last_schedule_jiffies;
+				printk(KERN_EMERG"pid = %d,comm = %s,last_schedule=%lu\n",p->pid,p->comm,p->last_schedule_jiffies);
+				show_stack(p , NULL);
+			}
+			else
+			{
+				continue;
+			}
+		} while_each_thread(g, p);
+		//task_unlock(g);
+	}
+	queue_delayed_work(thread_debug_wq , &thread_debug_work , schedule_seconds*HZ);
+}
+
+static ssize_t thread_info_read(struct file *file, char __user *buf, size_t size, loff_t *ppos)
+{
+	return simple_read_from_buffer(buf,size,ppos,print_thread_name,strlen(print_thread_name));
+}
+static ssize_t thread_info_write(struct file *file, const char __user *ubuf,size_t len, loff_t *offp)
+{
+	ssize_t size = 0;
+	memset(print_thread_name , 0 , 512);
+	size = simple_write_to_buffer(print_thread_name,511,offp,ubuf,len);
+	if(print_thread_name[0] == '0')
+	{
+		//printk("%s:%d\n" , __FUNCTION__,__LINE__);
+		cancel_delayed_work(&thread_debug_work);
+	}
+	else
+	{
+		//printk("%s:%d\n" , __FUNCTION__,__LINE__); 
+		queue_delayed_work(thread_debug_wq , &thread_debug_work , 10*HZ);
+	}
+	return size;
+}
+
+static const struct file_operations thread_onfo_fops = {
+	.owner = THIS_MODULE,
+	.open = simple_open,
+	.read = thread_info_read,
+	.write = thread_info_write
+};
+
+static int thread_debug_init(void)
+{
+	thread_debug_wq = create_workqueue("thread_debug");
+	if (IS_ERR(thread_debug_wq)) {
+		pr_err("%s: create_singlethread_workqueue ENOMEM\n", __func__);
+		return -ENOMEM;
+	}
+	return 0;
+}
+
+static void init_thread_debug_fs(void)
+{
+	struct dentry *thread_dir = debugfs_create_dir("thread", debug_mem_dir);
+	debugfs_create_file("thread_info", S_IRWXUGO, thread_dir, NULL,&thread_onfo_fops);
+	debugfs_create_x32("print_seconds", S_IRWXUGO, thread_dir,(u32 *)&print_seconds);
+	debugfs_create_x32("schedule_seconds", S_IRWXUGO, thread_dir,(u32 *)&schedule_seconds);
+	thread_debug_init();
+}
+#else
+static void init_thread_debug_fs(void)
+{
+}
+#endif
+
+/**************************************************************************************/
 static int __init debug_init(void)
 {
 
 	init_debug_memfs();
 	init_task_structfs();
 	init_cpu_info_structfs();
-#ifdef SUSPEND_RESUME_DEBUG
-	after_dpm_suspend_start = after_dpm_suspend_start_callback;
-	first_step_for_resume = resume_first;
-	resume_before_irq_enable = resume_before_irq_enabled;
-	suspend_after_irq_disable = suspend_after_irq_disabled;
-	last_step_for_suspend = last_suspend_callback;
-	suspend_resume_addr= (unsigned int) &suspend_resume_base_addr;
-	resume_before_gic_irq_resume = resume_before_gic_irq_resumed;
-	suspend_after_gic_irq_suspend = suspend_after_gic_irq_suspended;
-	resume_before_msm_tlmm_v4_gp_irq_resume = resume_before_msm_tlmm_v4_gp_irq_resumed;
-	suspend_after_msm_tlmm_v4_gp_irq_suspend = suspend_after_msm_tlmm_v4_gp_irq_suspended;
-	
-	init_suspend_resume_fs();
-#endif
+	init_suspend_resume();
+	init_thread_debug_fs();
+
 	return 0;
 }
 

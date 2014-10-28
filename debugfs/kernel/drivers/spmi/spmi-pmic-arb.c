@@ -831,8 +831,13 @@ static irqreturn_t pmic_arb_periph_irq(int irq, void *dev_id)
 int debug_qpnpint_show_resume_irq = 0;
 EXPORT_SYMBOL_GPL(debug_qpnpint_show_resume_irq);
 
+void (*before_spmi_pmic_arb_resume)(void) = 0;
 static void spmi_pmic_arb_resume(void)
 {
+	if(before_spmi_pmic_arb_resume != NULL)
+	{
+		before_spmi_pmic_arb_resume();
+	}
 	if (debug_qpnpint_show_resume_irq)
 	{
 		printk(KERN_EMERG"\n\n\n\n\n----------------spmi pmic interrupt-------------------------------------\n");
@@ -840,6 +845,15 @@ static void spmi_pmic_arb_resume(void)
 		printk(KERN_EMERG"----------------------------------------------------------------------\n\n\n\n\n");
 	}
 }
+
+void debugfs_spmi_pmic_arb_resume(void)
+{
+	printk(KERN_EMERG"\n\n\n\n\n----------------spmi pmic interrupt-------------------------------------\n");
+	__pmic_arb_periph_irq(the_pmic_arb->pic_irq,the_pmic_arb, true);
+	printk(KERN_EMERG"----------------------------------------------------------------------\n\n\n\n\n");
+}
+EXPORT_SYMBOL_GPL(debugfs_spmi_pmic_arb_resume);
+
 
 static struct syscore_ops spmi_pmic_arb_syscore_ops = {
 	.resume = spmi_pmic_arb_resume,
