@@ -30,6 +30,16 @@ function schedule_seconds()
 	fi
 }
 
+function kernel_dead()
+{
+	cat $thread_info_kernel_dead;
+}
+
+function dump_pid()
+{
+	echo $1 > $thread_info_dump_pid;
+}
+
 
 function help_thread_info()
 {
@@ -37,6 +47,8 @@ function help_thread_info()
 	echo "thread_info_config (kernel for kernel ,or other filename)";
 	echo "print_seconds (-value) read or write the print seconds";
 	echo "schedule_seconds (-value) read or write the schedule seconds";
+	echo "kernel_dead dump dead kernel thread backtrace";
+	echo "dump_pid pid dump the pid backtrace";
 	echo "----------------------------------------------------------";
 }
 help_thread_info;

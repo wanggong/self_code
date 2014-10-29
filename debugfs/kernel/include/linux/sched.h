@@ -1447,6 +1447,7 @@ struct task_struct {
 	unsigned int	sequential_io;
 	unsigned int	sequential_io_avg;
 #endif
+	unsigned long 	debug_state;
 	unsigned long   last_schedule_jiffies;
 	unsigned long   last_check_jiffies;
 

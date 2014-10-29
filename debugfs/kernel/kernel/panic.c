@@ -23,6 +23,8 @@
 #include <linux/init.h>
 #include <linux/nmi.h>
 #include <linux/syscalls.h>
+#include <linux/freezer.h>
+
 
 
 #define CREATE_TRACE_POINTS
@@ -68,13 +70,47 @@ void __weak panic_smp_self_stop(void)
 		cpu_relax();
 }
 
+static char notfreeze[] = "adbd,sh,init";
+void freeze_user_task(void)
+{
+	struct task_struct *g, *p;
+	rcu_read_lock();
+	for_each_process(g)
+	{
+		p = g;
+		if(p == current)
+		{
+			continue;
+		}
+		if((p->flags&PF_KTHREAD))
+		{
+			continue;
+		}
+		else
+		{
+			if(strstr(notfreeze,p->comm))
+			{
+				continue;
+			}
+		}
+
+		do 
+		{
+			p->debug_state = __TASK_STOPPED;
+			set_task_state(p,__TASK_STOPPED);
+		} while_each_thread(g, p);
+	}
+	rcu_read_unlock();
+}
 void dump_panic_stack_and_sync(void)
 {
 	printk(KERN_EMERG"--------------------------------------------------------------------------\n");
 	dump_stack();
+	printk(KERN_EMERG"pid=%d,tgid=%d,comm=%s\n",current->pid,current->tgid,current->comm);
 	printk(KERN_EMERG"---------------------------------------------------------------------------\n");
 	sys_sync();
 	sys_sync();
+	freeze_user_task();
 }
 
 /**
@@ -93,6 +129,9 @@ void panic(const char *fmt, ...)
 	long i, i_next = 0;
 	int state = 0;
 	dump_panic_stack_and_sync();
+	set_current_state(__TASK_STOPPED);
+	current->debug_state = __TASK_STOPPED;
+	schedule();
 	trace_kernel_panic(0);
 	/*
 	 * Disable local interrupts. This will prevent panic_smp_self_stop

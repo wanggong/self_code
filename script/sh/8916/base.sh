@@ -12,6 +12,8 @@ suspend_resume_debug_path="/d/debug_mem/suspend_resume/suspend_resume_debug";
 thread_info_thread_info_path="/d/debug_mem/thread/thread_info";
 thread_info_print_seconds_path="/d/debug_mem/thread/print_seconds";
 thread_info_schedule_seconds_path="/d/debug_mem/thread/schedule_seconds";
+thread_info_kernel_dead="/d/debug_mem/thread/dump_dead_kernel";
+thread_info_dump_pid="/d/debug_mem/thread/dump_pid";
 
 function set_value_addr()
 {

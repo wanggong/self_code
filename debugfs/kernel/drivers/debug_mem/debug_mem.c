@@ -975,12 +975,65 @@ static void init_suspend_resume(void)
 /**********************************Thread**********************************************/
 #define DEBUG_THREAD_MONITOR
 #ifdef DEBUG_THREAD_MONITOR
+static unsigned int dump_pid = -1;
+
+static int dump_pid_set(void *data, u64 val)
+{
+	struct task_struct *tsk;
+	*(u32*)data = (u32)val;
+	if(val < 0)
+	{
+		return 0;
+	}
+	tsk = find_task_by_vpid(val);
+	if(!tsk)
+	{
+		return 0;
+	}
+	printk("\n-----------------------------------------------------\n");
+	printk(KERN_EMERG"pid = %d,comm = %s,last_schedule=%lu\n",tsk->pid,tsk->comm,tsk->last_schedule_jiffies);
+	show_stack(tsk , NULL);
+	printk("-----------------------------------------------------\n\n");
+	return 0;
+}
+
+DEFINE_SIMPLE_ATTRIBUTE(fops_dump_pid, 0 , dump_pid_set, "0x%08llx\n");
+
+
+static unsigned int dump_dead_kernel_thread = -1;
+
+static int dump_dead_kernel_thread_get(void *data, u64 *val)
+{
+	struct task_struct *g, *p;
+	
+	//read_lock(&tasklist_lock);
+	do_each_thread(g, p) 
+	{
+		if ((p->debug_state == __TASK_STOPPED)&&(p->state == __TASK_STOPPED) && (p->flags&PF_KTHREAD))
+		{
+			printk("\n-----------------------------------------------------\n");
+			printk(KERN_EMERG"pid = %d,comm = %s,last_schedule=%lu\n",p->pid,p->comm,p->last_schedule_jiffies);
+			show_stack(p , NULL);
+			printk("-----------------------------------------------------\n\n");
+		}
+	} while_each_thread(g, p);
+	//read_unlock(&tasklist_lock);
+	return 0;
+}
+
+DEFINE_SIMPLE_ATTRIBUTE(fops_dump_dead_kernel_thread, dump_dead_kernel_thread_get, 0 , "0x%08llx\n");
+
+
+
+
 static void thread_debug_work_func(struct work_struct *work);
 struct workqueue_struct *thread_debug_wq;
 static DECLARE_DELAYED_WORK(thread_debug_work, thread_debug_work_func);
 
 static unsigned int print_seconds = 30;
 static unsigned int schedule_seconds = 15;
+
+
 static char print_thread_name[512] = {0};
 
 static void thread_debug_work_func(struct work_struct *work)
@@ -1024,8 +1077,10 @@ static void thread_debug_work_func(struct work_struct *work)
 			if(time_after(jiffies,p->last_schedule_jiffies + print_seconds*HZ))
 			{
 				p->last_check_jiffies = p->last_schedule_jiffies;
+				printk("\n-----------------------------------------------------\n");
 				printk(KERN_EMERG"pid = %d,comm = %s,last_schedule=%lu\n",p->pid,p->comm,p->last_schedule_jiffies);
 				show_stack(p , NULL);
+				printk("-----------------------------------------------------\n\n");
 			}
 			else
 			{
@@ -1082,6 +1137,8 @@ static void init_thread_debug_fs(void)
 	debugfs_create_file("thread_info", S_IRWXUGO, thread_dir, NULL,&thread_onfo_fops);
 	debugfs_create_x32("print_seconds", S_IRWXUGO, thread_dir,(u32 *)&print_seconds);
 	debugfs_create_x32("schedule_seconds", S_IRWXUGO, thread_dir,(u32 *)&schedule_seconds);
+	debugfs_create_file("dump_pid", 0777,thread_dir, &dump_pid,&fops_dump_pid);
+	debugfs_create_file("dump_dead_kernel", 0777,thread_dir, &dump_dead_kernel_thread,&fops_dump_dead_kernel_thread);
 	thread_debug_init();
 }
 #else
