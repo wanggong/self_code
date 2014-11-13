@@ -38,6 +38,13 @@
 
 
 #include <asm/mach/map.h>
+
+#include <linux/kallsyms.h>
+
+#include <linux/perf_event.h>
+#include <linux/hw_breakpoint.h>
+#include <linux/kprobes.h>
+
 #define SUSPEND_RESUME_DEBUG
 #define SUSPEND_RESUME_DEBUG_DUMP_REGULATOR
 #define SUSPEND_RESUME_DEBUG_DUMP_GPIO
@@ -1146,6 +1153,163 @@ static void init_thread_debug_fs(void)
 {
 }
 #endif
+/**************************************************************************************/
+
+/********************************BreakPoint**********************************************/
+#define DEBUG_BREAKPOINT
+#ifdef DEBUG_BREAKPOINT
+static void breakpoint_work_func(struct work_struct *work);
+static DECLARE_DELAYED_WORK(breakpoint_work, breakpoint_work_func);
+
+static char break_point_name[512];
+static struct perf_event * __percpu *breakpoint_hbp = 0;
+static unsigned int hw_breakpoint_xwr = 0;
+static unsigned int dump_stack_breakpoint = 1;
+
+
+extern void hw_breakpoint_del_debug(struct perf_event *bp, int flags);
+extern int hw_breakpoint_add_debug(struct perf_event *bp, int flags);
+extern int prepare_for_breakpoint(void);
+extern int  prepare_kprobe_for_breakpoint(struct kprobe *p);
+static void before_breakpoint_exec(struct perf_event *bp,struct perf_sample_data *data,struct pt_regs *regs)
+{
+	if(dump_stack_breakpoint&1)
+	{
+		dump_stack();
+	}
+}
+
+static void after_breakpoint_exec(struct perf_event *bp,struct perf_sample_data *data,struct pt_regs *regs)
+{
+	if(dump_stack_breakpoint&2)
+	{
+		dump_stack();
+	}
+}
+
+
+static void debug_breakpoint_handler(struct perf_event *bp
+											,struct perf_sample_data *data,struct pt_regs *regs)
+{
+	struct kprobe kpro;
+	//printk(KERN_INFO "%s value is changed \n", break_point_name );
+	hw_breakpoint_del_debug(bp , 0);
+	before_breakpoint_exec(bp,data,regs);
+	kpro.addr=(u32*)regs->ARM_pc;
+	prepare_kprobe_for_breakpoint(&kpro);
+	kpro.ainsn.insn_singlestep(&kpro,regs);
+	after_breakpoint_exec(bp,data,regs);
+	hw_breakpoint_add_debug(bp , PERF_EF_START);
+}
+
+static void remove_breakpoint(void)
+{
+	if(breakpoint_hbp != NULL)
+	{
+		unregister_wide_hw_breakpoint(breakpoint_hbp);
+		printk(KERN_INFO "HW Breakpoint for write uninstalled\n");
+		breakpoint_hbp = NULL;
+	}
+}
+
+static int __init add_breakpoint(void)
+{
+	int ret;
+	struct perf_event_attr attr;
+	unsigned long address_breakpoint = 0;
+
+	prepare_for_breakpoint();
+	if(breakpoint_hbp != NULL)
+	{
+		remove_breakpoint();
+	}
+	
+	hw_breakpoint_init(&attr);
+	if(break_point_name[0] == '0' && (break_point_name[1] == 'x' || break_point_name[1]=='X'))
+	{
+		sscanf(&(break_point_name[2]),"%lx",&address_breakpoint);
+		attr.bp_addr = address_breakpoint;
+	}
+	else
+	{
+		attr.bp_addr = kallsyms_lookup_name(break_point_name);
+		printk("lockaddr bp_addr = 0x%llx\n",attr.bp_addr);
+	}
+	attr.bp_len = HW_BREAKPOINT_LEN_4;
+	attr.bp_type = HW_BREAKPOINT_W ;
+	if(hw_breakpoint_xwr)
+	{
+		attr.bp_type = hw_breakpoint_xwr ;
+	}
+
+	breakpoint_hbp = register_wide_hw_breakpoint(&attr, debug_breakpoint_handler, NULL);
+	if (IS_ERR((void __force *)breakpoint_hbp)) 
+	{
+		ret = PTR_ERR((void __force *)breakpoint_hbp);
+		breakpoint_hbp = NULL;
+		printk(KERN_INFO "Breakpoint registration failed ret = %d" , ret);
+	}
+	else
+	{
+		printk(KERN_INFO "HW Breakpoint for %s (addr:0x%llx)(%s%s%s) installed\n"
+			, break_point_name , attr.bp_addr ,hw_breakpoint_xwr&HW_BREAKPOINT_R?"R":""
+			,hw_breakpoint_xwr&HW_BREAKPOINT_W?"W":"",hw_breakpoint_xwr&HW_BREAKPOINT_X?"X":"");
+	}
+	return 0;
+}
+
+
+static ssize_t breakpoint_read(struct file *file, char __user *buf, size_t size, loff_t *ppos)
+{
+	return simple_read_from_buffer(buf,size,ppos,break_point_name,strlen(break_point_name));
+}
+static ssize_t breakpoint_write(struct file *file, const char __user *ubuf,size_t len, loff_t *offp)
+{
+	ssize_t size = 0;
+	memset(break_point_name , 0 , 512);
+	size = simple_write_to_buffer(break_point_name,511,offp,ubuf,len);
+	if(break_point_name[strlen(break_point_name)-1] == '\n')
+	{
+		break_point_name[strlen(break_point_name)-1] = 0;
+	}
+	schedule_delayed_work(&breakpoint_work,100);
+
+	return size;
+}
+
+static void breakpoint_work_func(struct work_struct *work)
+{
+	if(break_point_name[0] == '0' && break_point_name[1] == 0)
+	{
+		remove_breakpoint();
+	}
+	else
+	{
+		add_breakpoint();
+	}
+}
+
+
+static const struct file_operations breakpoint_fops = {
+	.owner = THIS_MODULE,
+	.open = simple_open,
+	.read = breakpoint_read,
+	.write = breakpoint_write
+};
+
+static void init_breakpoint_debug_fs(void)
+{
+	struct dentry *breakpoint_dir = debugfs_create_dir("breakpoint", debug_mem_dir);
+	debugfs_create_file("breakpoint", S_IRWXUGO, breakpoint_dir, NULL,&breakpoint_fops);
+	debugfs_create_x32("hw_breakpoint_xwr", S_IRWXUGO, breakpoint_dir,(u32 *)&hw_breakpoint_xwr);
+	debugfs_create_x32("dump_stack_breakpoint", S_IRWXUGO, breakpoint_dir,(u32 *)&dump_stack_breakpoint);
+}
+	
+#else
+static void init_breakpoint_debug_fs(void)
+{
+}
+#endif
 
 /**************************************************************************************/
 static int __init debug_init(void)
@@ -1156,6 +1320,7 @@ static int __init debug_init(void)
 	init_cpu_info_structfs();
 	init_suspend_resume();
 	init_thread_debug_fs();
+	init_breakpoint_debug_fs();
 
 	return 0;
 }

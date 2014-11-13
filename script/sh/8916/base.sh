@@ -14,7 +14,9 @@ thread_info_print_seconds_path="/d/debug_mem/thread/print_seconds";
 thread_info_schedule_seconds_path="/d/debug_mem/thread/schedule_seconds";
 thread_info_kernel_dead="/d/debug_mem/thread/dump_dead_kernel";
 thread_info_dump_pid="/d/debug_mem/thread/dump_pid";
-
+breakpoint="/d/debug_mem/breakpoint/breakpoint";
+hw_breakpoint_xwr="/d/debug_mem/breakpoint/hw_breakpoint_xwr";
+dump_stack_breakpoint_path="/d/debug_mem/breakpoint/dump_stack_breakpoint"
 function set_value_addr()
 {
 	echo $1 > $vir_addr_path; 
