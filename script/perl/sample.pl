@@ -20,7 +20,7 @@ sub vartest()
 }
 
 
-#$_[0] is the first parameter, $_[1] is the second parameter, and $#_ is the parameters's count
+#  $_[0] is the first parameter, $_[1] is the second parameter, and $#_ is the parameters's count
 sub functest
 {
 	my $i;
@@ -133,3 +133,7 @@ sub forloop()
   }
   printf("$i = %d\n" , $i);
 }
+
+
+#change current folder
+chdir './folder';
