@@ -5,15 +5,28 @@ sub compile_files
 	#printf("folder=%s\n",$folder);
 	my $compile_cmd=sprintf("gcc ./%s/*.c -o %s" , $folder , $folder);
 	#printf("compile_cmd=%s\n",$compile_cmd);
-	system($compile_cmd);
+	$err = system($compile_cmd);
+	if($err != 0)
+	{
+		die("compile error");
+	}
 }
 
 sub execute_script
 {
 	my $folder=$_[0];
-	my $command=sprintf(".//%s.exe" , $folder);
+	my $args=$_[1];
+	my $command=sprintf(".//%s.exe %s" , $folder , $args);
 	#printf("command=%s\n",$command);
-	system($command);
+	$err = system($command);
+	if($err != 0)
+	{
+		die("exec cmd %s error" , $command);
+	}
+	else
+	{
+		printf("%s exec success\n" , $command);
+	}
 }
 
 sub main
@@ -21,7 +34,14 @@ sub main
 	my $folder=$ARGV[0];
 	#printf("folder=%s\n",$folder);
 	compile_files $folder;
-	execute_script $folder;
+	
+	my $i;
+	my $args;
+	for($i = 1 ; $i <= $#ARGV ; $i++)
+	{
+		$args = sprintf("%s %s ",$args,$ARGV[$i]);
+	}	
+	execute_script($folder,$args);
 }
 
 main;

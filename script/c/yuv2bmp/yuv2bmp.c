@@ -1,5 +1,6 @@
 #include "stdio.h"
 #include "stdlib.h"
+#include "string.h"
 
 struct BITMAPFILEHEADER 
 {   // bmfh
@@ -90,7 +91,7 @@ void yuvtorgb888(int width, int height, unsigned char *src_y, unsigned char *src
     unsigned int i, j;
     int r, g, b;
     unsigned int YPOS, UPOS, VPOS;
-    unsigned int num = height * width - 1;
+    unsigned int num = 0;
 
     for(i = 0; i < height; i++) {
         for(j = 0; j < width; j++) {
@@ -116,15 +117,43 @@ void yuvtorgb888(int width, int height, unsigned char *src_y, unsigned char *src
             if(b < 0)
                 b = 0;
 
-            dest_rgb8888[num * 3] = r;
+            dest_rgb8888[num * 3] = b;
             dest_rgb8888[num * 3 + 1] = g;
-            dest_rgb8888[num * 3 + 2] = b;
+            dest_rgb8888[num * 3 + 2] = r;
 
-            num--;
+            num++;
         }
     }
     num++;
 }
+
+void rgb_mirror_LR(unsigned char *rgb_buf , int width , int height)
+{
+	unsigned char *temp_buf = (unsigned char*)malloc(width*3);
+	for(int i = 0 ; i < height ; i++)
+	{
+		memcpy(temp_buf , rgb_buf+i*width*3,width*3);
+		for(int k=0;k<width;k++)
+		{
+			rgb_buf[((i*width+k)*3)+0]=temp_buf[(width-k-1)*3+0];
+			rgb_buf[((i*width+k)*3)+1]=temp_buf[(width-k-1)*3+1];
+			rgb_buf[((i*width+k)*3)+2]=temp_buf[(width-k-1)*3+2];
+		}
+	}
+}
+
+void rgb_mirror_UB(unsigned char *rgb_buf , int width , int height)
+{
+	unsigned char *temp_buf = (unsigned char*)malloc(width*3);
+	for(int i = 0 ; i < height/2 ; i++)
+	{
+		memcpy(temp_buf , rgb_buf+i*width*3,width*3);
+		memcpy(rgb_buf+i*width*3 , rgb_buf+(height-i-1)*width*3 , width*3);
+		memcpy(rgb_buf+(height-i-1)*width*3 , temp_buf , width*3);
+	}
+}
+
+
 
 
 void yuv2rgb(unsigned char *yuv_buffer, unsigned char *rgb_buffer,int width , int height)
@@ -133,47 +162,97 @@ void yuv2rgb(unsigned char *yuv_buffer, unsigned char *rgb_buffer,int width , in
 	unsigned char *uv_buffer=yuv_buffer+width*height;
 	unsigned char  *rgb_used = rgb_buffer;
 	yuvtorgb888(width,height,y_buffer,uv_buffer,rgb_used);
-	/*
-	for(int i = 0 ; i < height ; ++i)
-	{
-		y_buffer=yuv_buffer + i*width*3/2;
-		uv_buffer = y_buffer+width;
-		rgb_used = rgb_buffer+i*width*3;
-		yuvtorgb888(width,1,y_buffer,uv_buffer,rgb_used);
-	}
-	*/
 }
-
+//yuv2bmp yuv_name [width] [height] [mirror]
+//mirror 1 for LR 2 for UB ,3 for LR and UB
 int main(char argc , char **argv)
 {
 	FILE *file_bmp;
 	FILE *file_yuv;
 	int width = 3200;
 	int height = 2400;
-	file_bmp = fopen("./test.bmp","w+");
+	char yuv_file_name[256]={0};
+	char bmp_file_name[256]={0};
+	int mirror = 0;
+	if(argc < 2)
+	{
+		printf("Useage: yuv2bmp yuv_name [width] [height] [mirror]\n");
+		printf("yuv_name : short file name , no .yuv\n");
+		printf("mirror : 1 for left right mirror , 2 for up bottom mirror,3 for LR and UB\n");
+		return 0;
+	}
+	else
+	{
+		sprintf(yuv_file_name,"./%s.yuv",argv[1]);
+		sprintf(bmp_file_name,"./%s.bmp",argv[1]);
+	}
+	if(argc >= 4)
+	{
+		width = atoi(argv[2]);
+		height = atoi(argv[3]);
+	}
+
+	if(argc >= 5)
+	{
+		mirror = atoi(argv[4]);
+	}
+
+	
+	file_bmp = fopen(bmp_file_name,"wb+");
 	if(file_bmp==0)
 	{
-		perror("file_bmp open ./test.bmp:");
+		perror("file_bmp open:");
+		return -1;
 	}
-	file_yuv = fopen("./1.yuv","r");
+	file_yuv = fopen(yuv_file_name,"rb");
 	if(file_yuv==0)
 	{
-		perror("file_yuv open :");
+		perror("file_yuv open:");
+		return -1;
 	}
 	int yuv_size=width*height*3/2;
 	unsigned char *yuv_buffer = (unsigned char*)malloc(yuv_size);
+	if(yuv_buffer == 0)
+	{
+		perror("alloc yuv buffer failed:");
+		return -1;
+	}
 	int rgb_size=width*height*3;
 	unsigned char *rgb_buffer = (unsigned char*)malloc(rgb_size);
-	fread(yuv_buffer,1,yuv_size,file_yuv);
+	if(rgb_buffer == 0)
+	{
+		perror("alloc rgb buffer failed:");
+		return -1;
+	}
+	int read_size = fread(yuv_buffer,1,yuv_size,file_yuv);
+	if(read_size != yuv_size)
+	{
+		perror("read file error:");
+		return -1;
+	}
+
 	yuv2rgb(yuv_buffer,rgb_buffer,width,height);
-	printf("wanggongzhen\n");
+	if(mirror & 1)
+	{
+		rgb_mirror_LR(rgb_buffer,width,height);
+	}
+	if(mirror&2)
+	{
+		rgb_mirror_UB(rgb_buffer,width,height);
+	}
+	
 	write_bmp_header(file_bmp,width,height);
 	write_bmp_info_header(file_bmp,width,height);
-	fwrite(rgb_buffer,1,rgb_size,file_bmp);
-	
+	int write_size = fwrite(rgb_buffer,1,rgb_size,file_bmp);
+	if(write_size != rgb_size)
+	{
+		perror("write file error:");
+		return -1;
+	}
 	free(yuv_buffer);
 	free(rgb_buffer);
 	fclose(file_bmp);
 	fclose(file_yuv);
+	printf("wanggongzhen exit success\n");
 	return 0;
 }
