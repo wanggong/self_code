@@ -120,7 +120,7 @@ struct console_cmdline
 static struct console_cmdline console_cmdline[MAX_CMDLINECONSOLES];
 static int selected_console = -1;
 static int preferred_console = -1;
-int console_set_on_cmdline;
+int console_set_on_cmdline = 0;
 EXPORT_SYMBOL(console_set_on_cmdline);
 
 /* Flag: console code may call schedule() */
@@ -2728,6 +2728,11 @@ static int __init printk_late_init(void)
 		}
 	}
 	hotcpu_notifier(console_cpu_notify, 0);
+	if(console_set_on_cmdline!=1)
+	{
+		printk("wgz init console\n");
+		console_setup("ttyHSL0,115200,n8 ");
+	}
 	return 0;
 }
 late_initcall(printk_late_init);

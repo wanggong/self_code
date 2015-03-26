@@ -1164,7 +1164,7 @@ static DECLARE_DELAYED_WORK(breakpoint_work, breakpoint_work_func);
 static char break_point_name[512];
 static struct perf_event * __percpu *breakpoint_hbp = 0;
 static unsigned int hw_breakpoint_xwr = 0;
-static unsigned int dump_stack_breakpoint = 1;
+static unsigned int dump_stack_breakpoint = 3;
 
 
 extern void hw_breakpoint_del_debug(struct perf_event *bp, int flags);
@@ -1175,6 +1175,10 @@ static void before_breakpoint_exec(struct perf_event *bp,struct perf_sample_data
 {
 	if(dump_stack_breakpoint&1)
 	{
+		if(bp->attr.bp_type&HW_BREAKPOINT_RW)
+		{
+			pr_err("before breakpoint value=%d\n",*(int*)(unsigned long)(bp->attr.bp_addr));
+		}
 		dump_stack();
 	}
 }
@@ -1183,6 +1187,10 @@ static void after_breakpoint_exec(struct perf_event *bp,struct perf_sample_data 
 {
 	if(dump_stack_breakpoint&2)
 	{
+		if(bp->attr.bp_type&HW_BREAKPOINT_RW)
+		{
+			pr_err("after breakpoint value=%d\n",*(int*)(unsigned long)(bp->attr.bp_addr));
+		}
 		dump_stack();
 	}
 }
@@ -1212,34 +1220,24 @@ static void remove_breakpoint(void)
 	}
 }
 
-static int __init add_breakpoint(void)
+int add_breakpoint_addr(unsigned long address,int watch_type)
 {
 	int ret;
 	struct perf_event_attr attr;
-	unsigned long address_breakpoint = 0;
-
-	prepare_for_breakpoint();
+	
+	prepare_for_breakpoint(); 
 	if(breakpoint_hbp != NULL)
 	{
 		remove_breakpoint();
 	}
 	
 	hw_breakpoint_init(&attr);
-	if(break_point_name[0] == '0' && (break_point_name[1] == 'x' || break_point_name[1]=='X'))
-	{
-		sscanf(&(break_point_name[2]),"%lx",&address_breakpoint);
-		attr.bp_addr = address_breakpoint;
-	}
-	else
-	{
-		attr.bp_addr = kallsyms_lookup_name(break_point_name);
-		printk("lockaddr bp_addr = 0x%llx\n",attr.bp_addr);
-	}
+	attr.bp_addr = address;
 	attr.bp_len = HW_BREAKPOINT_LEN_4;
 	attr.bp_type = HW_BREAKPOINT_W ;
-	if(hw_breakpoint_xwr)
+	if(watch_type)
 	{
-		attr.bp_type = hw_breakpoint_xwr ;
+		attr.bp_type = watch_type ;
 	}
 
 	breakpoint_hbp = register_wide_hw_breakpoint(&attr, debug_breakpoint_handler, NULL);
@@ -1256,6 +1254,23 @@ static int __init add_breakpoint(void)
 			,hw_breakpoint_xwr&HW_BREAKPOINT_W?"W":"",hw_breakpoint_xwr&HW_BREAKPOINT_X?"X":"");
 	}
 	return 0;
+
+}
+
+static int add_breakpoint(void)
+{
+	unsigned long address_breakpoint = 0;
+
+	if(break_point_name[0] == '0' && (break_point_name[1] == 'x' || break_point_name[1]=='X'))
+	{
+		sscanf(&(break_point_name[2]),"%lx",&address_breakpoint);
+	}
+	else
+	{
+		address_breakpoint = kallsyms_lookup_name(break_point_name);
+		printk("lockaddr bp_addr = 0x%lx\n",address_breakpoint);
+	}
+	return add_breakpoint_addr(address_breakpoint , hw_breakpoint_xwr);
 }
 
 
@@ -1312,6 +1327,50 @@ static void init_breakpoint_debug_fs(void)
 #endif
 
 /**************************************************************************************/
+
+
+/*********************************Sound Code Register************************************/
+
+#define DEBUG_SOUND_REGISTER
+#ifdef DEBUG_SOUND_REGISTER
+extern int msm8x16_wcd_write_for_debug(unsigned int reg,unsigned int value);
+extern int msm8x16_wcd_read_for_debug(unsigned int reg);
+
+static unsigned long sound_reg_address = 0;
+static int sound_register_get_func(void *data, u64 *val)
+{
+	int value = msm8x16_wcd_read_for_debug(sound_reg_address);
+	*val = value;
+	return 0;
+}
+
+static int sound_register_set_func(void *data, u64 val)
+{
+	unsigned int value = val;
+	msm8x16_wcd_write_for_debug(sound_reg_address , value);
+	return 0;
+}
+
+
+DEFINE_SIMPLE_ATTRIBUTE(sound_register_fops, sound_register_get_func, sound_register_set_func, "0x%08llx\n");
+
+static void init_sound_debug_fs(void)
+{
+	struct dentry *sound_dir = debugfs_create_dir("sound", debug_mem_dir);
+	debugfs_create_file("register_value", S_IRWXUGO, sound_dir, NULL,&sound_register_fops);
+	debugfs_create_x32("register_address", S_IRWXUGO, sound_dir,(u32 *)&sound_reg_address);
+}
+	
+#else
+static void init_sound_debug_fs(void)
+{
+}
+#endif
+
+
+/**************************************************************************************/
+
+
 static int __init debug_init(void)
 {
 
@@ -1321,6 +1380,7 @@ static int __init debug_init(void)
 	init_suspend_resume();
 	init_thread_debug_fs();
 	init_breakpoint_debug_fs();
+	init_sound_debug_fs();
 
 	return 0;
 }

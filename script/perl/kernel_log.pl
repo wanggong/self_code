@@ -2,7 +2,7 @@
 
 sub main()
 {
-	$vmlinux="/home/wanggongzhen/projects/lenovo/android/out/target/product/wt86518_A116G/obj/KERNEL_OBJ/vmlinux";
+	$vmlinux="/home/wanggongzhen/projects/lenovo/android/out/target/product/wt86518_A1/obj/KERNEL_OBJ/vmlinux";
 	$input_file=$ARGV[0];
         open(OPENFILE , $input_file);
         open(SAVEFILE ,">", "$input_file.log");

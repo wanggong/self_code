@@ -17,6 +17,8 @@ thread_info_dump_pid="/d/debug_mem/thread/dump_pid";
 breakpoint="/d/debug_mem/breakpoint/breakpoint";
 hw_breakpoint_xwr="/d/debug_mem/breakpoint/hw_breakpoint_xwr";
 dump_stack_breakpoint_path="/d/debug_mem/breakpoint/dump_stack_breakpoint"
+sound_register_address_path="/d/debug_mem/sound/register_address";
+sound_register_value_path="/d/debug_mem/sound/register_value";
 function set_value_addr()
 {
 	echo $1 > $vir_addr_path; 

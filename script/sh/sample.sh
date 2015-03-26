@@ -217,3 +217,21 @@ fi
  #string join
 debugfs_dir="/data/debugfs/"
 value_dir=${debugfs_dir}"/wanggongzhen"
+
+#return code
+#return code use $?
+function script_return_code()
+{
+if(($?==0))
+then
+echo "command ok";
+else
+echo "command error";
+fi
+}
+echo li;
+script_return_code;
+cat fdafda;
+script_return_code;
+
+

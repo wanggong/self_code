@@ -135,7 +135,7 @@ function help()
 	echo "setprop persist.camera.opt.livepic 1		(1:enable 0:disable defualt:1)"
 	echo "setprop persist.camera.stats.opt.mask 1     	(1|2|4|8|16 defualt:0)"
 	echo "setprop persist.camera.stats.debug.mask 1     	(1:AEC 2:awb 4:AF 8:ASD 0x10:AFD)"
-	echo "setprop persist.camera.ISP.debug.mask 1 		()"
+	echo "setprop persist.camera.ISP.debug.mask 1 		( 65535 (0xFFFF) for all bug)"
 	echo "setprop persist.camera.auto.hdr.enable enable 	(enable or disable)"
 	echo "setprop persist.capture.burst.exposures ""	(defualt:"")"
 	echo "setprop persist.camera.zsl.interval 1		(default:1)"
@@ -160,7 +160,7 @@ function help()
 
 
 	echo "-----------------other(pproc_module.c)-------------------------------------------"
-	echo "setprop persist.camera.pproc.debug.mask 268435463	(default:268435463)"
+	echo "setprop persist.camera.pproc.debug.mask 268435463	(default:268435463=0x10000007 ,all debug:0x30000007=805306375)"
 
 	echo "-----------------other(module_ubifocus.c)-------------------------------------------"
 	echo "setprop persist.camera.imglib.refocus 0		(default:0)"
