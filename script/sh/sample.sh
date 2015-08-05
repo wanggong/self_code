@@ -1,7 +1,18 @@
+date +%Y-%m-%d-%H-%M-%S
+read -n1 -p "press enter to continue" 
+function all_file
+{
+	for file in ./beauty/*.txt
+	do
+	echo $file
+	done
+}
+
+
 function func_test()
 {
-a="wang";  #there is no space between 'a' and '=' and 'wang' 
-echo "wang";
+	a="wang";  #there is no space between 'a' and '=' and 'wang' 
+	echo "wang";
 }
 #warning there is no brace'()' after the function name;use the function name to call function directly
 function func_usage()
@@ -215,23 +226,29 @@ fi
 }
  
  #string join
-debugfs_dir="/data/debugfs/"
-value_dir=${debugfs_dir}"/wanggongzhen"
+function string_join
+{
+	debugfs_dir="/data/debugfs/"
+	value_dir=${debugfs_dir}"/wanggongzhen"
+}
 
 #return code
 #return code use $?
 function script_return_code()
 {
-if(($?==0))
-then
-echo "command ok";
-else
-echo "command error";
-fi
+	if(($?==0))
+	then
+	echo "command ok";
+	else
+	echo "command error";
+	fi
 }
-echo li;
-script_return_code;
-cat fdafda;
-script_return_code;
+function script_return_code_test()
+{
+	echo li;
+	script_return_code;
+	cat fdafda;
+	script_return_code;
+}
 
 

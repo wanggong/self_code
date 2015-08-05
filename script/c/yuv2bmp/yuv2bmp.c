@@ -14,14 +14,14 @@ struct BITMAPFILEHEADER
 struct BITMAPINFOHEADER
 {    // bmih
     unsigned int   biSize;
-    unsigned long    biWidth;
-    unsigned long    biHeight;
+    unsigned int    biWidth;
+    unsigned int    biHeight;
     unsigned short    biPlanes;
     unsigned short    biBitCount;
     unsigned int   biCompression;
     unsigned int   biSizeImage;
-    unsigned long    biXPelsPerMeter;
-    unsigned long    biYPelsPerMeter;
+    unsigned int    biXPelsPerMeter;
+    unsigned int    biYPelsPerMeter;
     unsigned int   biClrUsed;
     unsigned int   biClrImportant;
 }__attribute((packed))  ;
@@ -42,10 +42,10 @@ struct RGBTRIPLE{   // rgbt
 void write_bmp_header(FILE *file,int width , int height)
 {
 	struct BITMAPFILEHEADER header;
-	unsigned char willwrite[sizeof(BITMAPFILEHEADER)];
+	unsigned char willwrite[sizeof(struct BITMAPFILEHEADER)];
 	header.bfType[0] = 'B';
 	header.bfType[1] = 'M';
-	header.bfSize = sizeof(BITMAPFILEHEADER)+sizeof(BITMAPINFOHEADER)+width*height*sizeof(RGBTRIPLE);
+	header.bfSize = sizeof(struct BITMAPFILEHEADER)+sizeof(struct BITMAPINFOHEADER)+width*height*sizeof(struct RGBTRIPLE);
 	header.bfReserved1 = 0;
 	header.bfReserved2 = 0;
 	header.bfOffBits = 54;
@@ -61,7 +61,7 @@ void write_bmp_info_header(FILE *file,int width , int height)
 	info_header.biPlanes = 1;
 	info_header.biBitCount = 24;
 	info_header.biCompression = 0;
-	info_header.biSizeImage = width*height*sizeof(RGBTRIPLE);
+	info_header.biSizeImage = width*height*sizeof(struct RGBTRIPLE);
 	info_header.biXPelsPerMeter = 0;
 	info_header.biYPelsPerMeter = 0;
 	info_header.biClrUsed = 0;
@@ -73,9 +73,10 @@ void write_bmp_info_header(FILE *file,int width , int height)
 void write_bmp_rgb(FILE *file,int width , int height)
 {
 	struct RGBTRIPLE rgb;
-	for(int i = 0 ; i < height ; ++i)
+	int i ,j;
+	for(i = 0 ; i < height ; ++i)
 	{
-		for(int j = 0 ; j < width; ++j)
+		for(j = 0 ; j < width; ++j)
 		{
 			rgb.rgbBlue = i;
 			rgb.rgbGreen = j;
@@ -130,10 +131,11 @@ void yuvtorgb888(int width, int height, unsigned char *src_y, unsigned char *src
 void rgb_mirror_LR(unsigned char *rgb_buf , int width , int height)
 {
 	unsigned char *temp_buf = (unsigned char*)malloc(width*3);
-	for(int i = 0 ; i < height ; i++)
+	int i ,k;
+	for(i = 0 ; i < height ; i++)
 	{
 		memcpy(temp_buf , rgb_buf+i*width*3,width*3);
-		for(int k=0;k<width;k++)
+		for(k=0;k<width;k++)
 		{
 			rgb_buf[((i*width+k)*3)+0]=temp_buf[(width-k-1)*3+0];
 			rgb_buf[((i*width+k)*3)+1]=temp_buf[(width-k-1)*3+1];
@@ -145,7 +147,8 @@ void rgb_mirror_LR(unsigned char *rgb_buf , int width , int height)
 void rgb_mirror_UB(unsigned char *rgb_buf , int width , int height)
 {
 	unsigned char *temp_buf = (unsigned char*)malloc(width*3);
-	for(int i = 0 ; i < height/2 ; i++)
+	int i ;
+	for(i = 0 ; i < height/2 ; i++)
 	{
 		memcpy(temp_buf , rgb_buf+i*width*3,width*3);
 		memcpy(rgb_buf+i*width*3 , rgb_buf+(height-i-1)*width*3 , width*3);
@@ -177,13 +180,13 @@ int main(char argc , char **argv)
 	if(argc < 2)
 	{
 		printf("Useage: yuv2bmp yuv_name [width] [height] [mirror]\n");
-		printf("yuv_name : short file name , no .yuv\n");
+		printf("yuv_name : short file name \n");
 		printf("mirror : 1 for left right mirror , 2 for up bottom mirror,3 for LR and UB\n");
 		return 0;
 	}
 	else
 	{
-		sprintf(yuv_file_name,"./%s.yuv",argv[1]);
+		sprintf(yuv_file_name,"./%s",argv[1]);
 		sprintf(bmp_file_name,"./%s.bmp",argv[1]);
 	}
 	if(argc >= 4)

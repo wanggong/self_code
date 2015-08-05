@@ -24,15 +24,22 @@ static int reg_data_width = 1;
 static int write_i2c_addr(int fd, int addr)
 {
 	int res = 0;
-    char sendbuffer1[2];
+    char sendbuffer1[4];
 	if(reg_addr_width == 1)
 	{
 		sendbuffer1[0]=addr;
 	}
-	else
+	else if(reg_addr_width == 2)
 	{
 		sendbuffer1[0]=addr>>8;
     	sendbuffer1[1]=addr;
+	}
+	else if(reg_addr_width == 4)
+	{
+		sendbuffer1[0]=(addr>>24)&0xF;
+    	sendbuffer1[1]=(addr>>16)&0xF;
+		sendbuffer1[2]=(addr>>8)&0xF;
+    	sendbuffer1[3]=addr&0xF;
 	}
     
     res = write(fd,sendbuffer1,reg_addr_width); 

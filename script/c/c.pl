@@ -3,7 +3,7 @@ sub compile_files
 {
 	my $folder=$_[0];
 	#printf("folder=%s\n",$folder);
-	my $compile_cmd=sprintf("gcc ./%s/*.c -o %s" , $folder , $folder);
+	my $compile_cmd=sprintf("gcc ./%s/*.c -o ./%s/%s" , $folder , $folder, $folder);
 	#printf("compile_cmd=%s\n",$compile_cmd);
 	$err = system($compile_cmd);
 	if($err != 0)
