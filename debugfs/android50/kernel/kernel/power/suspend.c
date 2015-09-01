@@ -167,7 +167,7 @@ void __attribute__ ((weak)) arch_suspend_enable_irqs(void)
 {
 	local_irq_enable();
 }
-
+#if 1 //wgz add
 void (*last_step_for_suspend)(void) = 0 ;
 void (*first_step_for_resume)(void) = 0 ;
 void (*resume_before_irq_enable)(void) = 0 ;
@@ -181,10 +181,7 @@ EXPORT_SYMBOL_GPL(first_step_for_resume);
 EXPORT_SYMBOL_GPL(resume_before_irq_enable);
 EXPORT_SYMBOL_GPL(suspend_after_irq_disable);
 EXPORT_SYMBOL_GPL(after_dpm_suspend_start);
-
-
-
-
+#endif //wgz add end
 /**
  * suspend_enter - Make the system enter the given sleep state.
  * @state: System sleep state to enter.
@@ -227,23 +224,24 @@ static int suspend_enter(suspend_state_t state, bool *wakeup)
 		freeze_enter();
 		goto Platform_wake;
 	}
-	
+#if 1 //wgz add	
 	if(last_step_for_suspend != NULL)
 	{
 		last_step_for_suspend();
 	}
+#endif //wgz add end
 	error = disable_nonboot_cpus();
 	if (error || suspend_test(TEST_CPUS))
 		goto Enable_cpus;
 
 	arch_suspend_disable_irqs();
 	BUG_ON(!irqs_disabled());
-
+#if 1 //wgz add
 	if(suspend_after_irq_disable != NULL)
 	{
 		suspend_after_irq_disable();
 	}
-	
+#endif //wgz add end
 	error = syscore_suspend();
 	if (!error) {
 		*wakeup = pm_wakeup_pending();
@@ -253,22 +251,23 @@ static int suspend_enter(suspend_state_t state, bool *wakeup)
 		}
 		syscore_resume();
 	}
-
+#if 1 //wgz add
 	if(resume_before_irq_enable != NULL)
 	{
 		resume_before_irq_enable();
 	}
-
+#endif //wgz add end
 	arch_suspend_enable_irqs();
 	BUG_ON(irqs_disabled());
 
  Enable_cpus:
 	enable_nonboot_cpus();
-
+#if 1 //wgz add
 	if(first_step_for_resume != NULL)
 	{
 		first_step_for_resume();
 	}
+#endif //wgz add end
  Platform_wake:
 	if (need_suspend_ops(state) && suspend_ops->wake)
 		suspend_ops->wake();
@@ -304,12 +303,12 @@ int suspend_devices_and_enter(suspend_state_t state)
 	ftrace_stop();
 	suspend_test_start();
 	error = dpm_suspend_start(PMSG_SUSPEND);
-
+#if 1 //wgz add
 	if(after_dpm_suspend_start != NULL)
 	{
 		after_dpm_suspend_start();
 	}
-	
+#endif //wgz add end
 	if (error) {
 		printk(KERN_ERR "PM: Some devices failed to suspend\n");
 		goto Recover_platform;

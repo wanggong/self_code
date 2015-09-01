@@ -136,7 +136,7 @@ static struct gpio_desc *gpio_to_desc(unsigned gpio)
  */
 static int desc_to_gpio(const struct gpio_desc *desc)
 {
-	return desc->chip->base + gpio_chip_hwgpio(desc);
+	return desc - &gpio_desc[0];
 }
 
 
@@ -1214,14 +1214,13 @@ int gpiochip_add(struct gpio_chip *chip)
 		}
 	}
 
+	spin_unlock_irqrestore(&gpio_lock, flags);
+
 #ifdef CONFIG_PINCTRL
 	INIT_LIST_HEAD(&chip->pin_ranges);
 #endif
 
 	of_gpiochip_add(chip);
-
-unlock:
-	spin_unlock_irqrestore(&gpio_lock, flags);
 
 	if (status)
 		goto fail;
@@ -1235,6 +1234,9 @@ unlock:
 		chip->label ? : "generic");
 
 	return 0;
+
+unlock:
+	spin_unlock_irqrestore(&gpio_lock, flags);
 fail:
 	/* failures here can mean systems won't boot... */
 	pr_err("gpiochip_add: gpios %d..%d (%s) failed to register\n",
@@ -2135,6 +2137,7 @@ static int gpiolib_seq_show(struct seq_file *s, void *v)
 }
 
 
+#if 1 //wgz add
 static void gpiolib_debug_show_detail(struct gpio_chip *chip)
 {
 	unsigned		i;
@@ -2195,9 +2198,7 @@ void gpio_debug_show_all(void)
 	}
 	spin_unlock_irqrestore(&gpio_lock, flags);
 }
-
-
-
+#endif //wgz add end
 static const struct seq_operations gpiolib_seq_ops = {
 	.start = gpiolib_seq_start,
 	.next = gpiolib_seq_next,
