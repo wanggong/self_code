@@ -6,7 +6,7 @@
 #phy_address=0xc10bf004
 phy_address=`cat $suspend_resume_addr`;
 #echo $phy_address;
-let suspend_resume_count=1024*4;
+let suspend_resume_count=1024*8;
 let suspend_value_address=$phy_address+$suspend_resume_count;
 let resume_value_address=$phy_address+$suspend_resume_count*2;
 phy_index=0;
@@ -18,11 +18,13 @@ GPIO_HIGH=2;
 GPIO_LOW=0;
 function suspend_resume_init()
 {
+	echo "suspend_resume_init start"
 	let phy_index=0;
 	while [ 1 ]
 	do
-		let address=$phy_address+$phy_index*4;
+		let address=$phy_address+$phy_index*8;
 		vir_value_get $address;
+		echo $vir_value_get_returned;
 		if(($vir_value_get_returned>0))
 		then	
 			let phy_index=$phy_index+1;
@@ -85,7 +87,7 @@ function reset_suspend_resume()
 	do
 		if(($phy_index>=0))
 		then
-			let address=$phy_address+$phy_index*4;
+			let address=$phy_address+$phy_index*8;
 			vir_value $address 0;
 			let phy_index=$phy_index-1;
 		else

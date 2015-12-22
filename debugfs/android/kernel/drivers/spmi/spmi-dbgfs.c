@@ -626,7 +626,7 @@ struct dentry *spmi_dfs_get_root(void)
 	mutex_unlock(&dbgfs_data.lock);
 	return dbgfs_data.root;
 }
-
+#if 1 //wgz add
 static struct spmi_controller *spmi_debug_ctrl = NULL;
 
 static void spmi_debug_dump_one_ldo(struct spmi_trans *trans)
@@ -661,6 +661,7 @@ static void spmi_debug_dump_one_ldo(struct spmi_trans *trans)
 	trans->log = NULL;
 }
 
+
 void spmi_debug_dump_all_ldo(void)
 {
 	struct spmi_trans trans;
@@ -683,8 +684,7 @@ void spmi_debug_dump_all_ldo(void)
 		printk(KERN_EMERG"---------------------------------------------------------------------------\n\n");
 	}
 }
-
-
+#endif //wgz add end
 /*
  * spmi_dfs_add_controller: adds new spmi controller entry
  * @return zero on success
@@ -697,7 +697,9 @@ int spmi_dfs_add_controller(struct spmi_controller *ctrl)
 	struct spmi_ctrl_data *ctrl_data;
 
 	pr_debug("Adding controller %s\n", ctrl->dev.kobj.name);
+#if 1 //wgz add
 	spmi_debug_ctrl = ctrl;
+#endif //wgz add end
 	root = spmi_dfs_get_root();
 	if (!root)
 		return -ENOENT;

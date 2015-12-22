@@ -9,9 +9,11 @@ count_path="/d/debug_mem/count";
 phy_printmems="/d/debug_mem/phy_printmems";
 vir_2_phy="/d/debug_mem/vir_2_phy";
 phy_2_vir="/d/debug_mem/phy_2_vir";
-suspend_resume_addr="/d/debug_mem/suspend_resume/suspend_resume_addr";
-suspend_resume_test="/d/debug_mem/suspend_resume/test";
-suspend_resume_debug_path="/d/debug_mem/suspend_resume/suspend_resume_debug";
+
+suspend_resume_dir=$base_path"/suspend_resume"
+suspend_resume_addr=$suspend_resume_dir"/suspend_resume_addr";
+suspend_resume_test=$suspend_resume_dir"test";
+suspend_resume_debug_path=$suspend_resume_dir"/suspend_resume_debug";
 
 thread_info_path=$base_path"/thread/"
 thread_info_print_seconds_path=$thread_info_path"/print_seconds";
@@ -46,7 +48,9 @@ function vir_value_set()
 
 function vir_value()
 {
-	let address=$1;
+	echo $1;
+	address=$1;
+	echo $address
 	if(($#<2))
 	then
 		vir_value_get $address;

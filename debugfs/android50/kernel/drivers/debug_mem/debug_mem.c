@@ -37,9 +37,9 @@
 #include <linux/kprobes.h>
 
 //#define DEBUG_SOUND_REGISTER
-#define SUSPEND_RESUME_DEBUG
-#define SUSPEND_RESUME_DEBUG_DUMP_REGULATOR
-#define SUSPEND_RESUME_DEBUG_DUMP_GPIO
+//#define SUSPEND_RESUME_DEBUG
+//#define SUSPEND_RESUME_DEBUG_DUMP_REGULATOR
+//#define SUSPEND_RESUME_DEBUG_DUMP_GPIO
 
 
 #define debug_printk(format, arg...) do{if(debug&1){printk(format, ##arg);}}while(0)
@@ -224,6 +224,7 @@ kernel/sched/core.c
 *****************/
 
 static unsigned int dump_pid = -1;
+static unsigned int dump_task = -1;
 
 static int dump_pid_set(void *data, u64 val)
 {
@@ -340,6 +341,50 @@ static void thread_debug_work_func(struct work_struct *work)
 	queue_delayed_work(thread_debug_wq , &thread_debug_work , schedule_seconds*HZ);
 }
 
+static char process_dump_task_name[512] = {0};
+static void thread_debug_dump_task_func(void)
+{
+	struct task_struct *g, *p;
+	freezer_do_not_count();
+	for_each_process(g)
+	{
+		p = g;
+		if(!strstr(process_dump_task_name,p->comm))
+		{
+			continue;
+		}
+		do 
+		{
+			p->last_check_jiffies = p->last_schedule_jiffies;
+			printk("\n-----------------------------------------------------\n");
+			printk(KERN_EMERG"pid = %d,comm = %s,last_schedule=%lu\n",p->pid,p->comm,p->last_schedule_jiffies);
+			show_stack(p , NULL);
+			printk("-----------------------------------------------------\n\n");
+		} while_each_thread(g, p);
+	}
+}
+
+void thread_debug_dump_task(struct task_struct *task)
+{
+	struct task_struct *g, *p;
+	g = p = task;
+	do 
+	{
+		p->last_check_jiffies = p->last_schedule_jiffies;
+		printk("\n-----------------------------------------------------\n");
+		printk(KERN_EMERG"pid = %d,comm = %s,last_schedule=%lu\n",p->pid,p->comm,p->last_schedule_jiffies);
+		show_stack(p , NULL);
+		printk("-----------------------------------------------------\n\n");
+	} while_each_thread(g, p);
+}
+
+
+static int dump_task_set(void *data, u64 val)
+{
+	thread_debug_dump_task_func();
+	return 0;
+}
+DEFINE_SIMPLE_ATTRIBUTE(fops_dump_task, 0 , dump_task_set, "0x%08llx\n");
 static ssize_t process_thread_stoped_read(struct file *file, char __user *buf, size_t size, loff_t *ppos)
 {
 	return simple_read_from_buffer(buf,size,ppos,process_thread_stoped_name,strlen(process_thread_stoped_name));
@@ -369,6 +414,23 @@ static const struct file_operations process_thread_stoped_fops = {
 	.write = process_thread_stoped_write
 };
 
+static ssize_t process_dump_task_read(struct file *file, char __user *buf, size_t size, loff_t *ppos)
+{
+	return simple_read_from_buffer(buf,size,ppos,process_dump_task_name,strlen(process_dump_task_name));
+}
+static ssize_t process_dump_task_write(struct file *file, const char __user *ubuf,size_t len, loff_t *offp)
+{
+	ssize_t size = 0;
+	memset(process_dump_task_name , 0 , 512);
+	size = simple_write_to_buffer(process_dump_task_name,511,offp,ubuf,len);
+	return size;
+}
+static const struct file_operations process_dump_task_fops = {
+	.owner = THIS_MODULE,
+	.open = simple_open,
+	.read = process_dump_task_read,
+	.write = process_dump_task_write
+};
 static int thread_debug_init(void)
 {
 	thread_debug_wq = create_workqueue("thread_debug");
@@ -382,10 +444,12 @@ static int thread_debug_init(void)
 static void init_thread_debug_fs(void)
 {
 	struct dentry *thread_dir = debugfs_create_dir("thread", debug_wgz);
+	debugfs_create_file("dump_task_comm", S_IRWXUGO, thread_dir, NULL,&process_dump_task_fops);
 	debugfs_create_file("process_thread_stoped", S_IRWXUGO, thread_dir, NULL,&process_thread_stoped_fops);
 	debugfs_create_x32("print_seconds", S_IRWXUGO, thread_dir,(u32 *)&print_seconds);
 	debugfs_create_x32("schedule_seconds", S_IRWXUGO, thread_dir,(u32 *)&schedule_seconds);
 	debugfs_create_file("dump_pid", 0777,thread_dir, &dump_pid,&fops_dump_pid);
+	debugfs_create_file("dump_task", 0777,thread_dir, &dump_task,&fops_dump_task);
 	debugfs_create_file("dump_dead_kernel", 0777,thread_dir, &dump_dead_kernel_thread,&fops_dump_dead_kernel_thread);
 	thread_debug_init();
 }

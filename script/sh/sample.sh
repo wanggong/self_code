@@ -1,5 +1,8 @@
 date +%Y-%m-%d-%H-%M-%S
 read -n1 -p "press enter to continue" 
+#string length
+aaa=0xffffffc001230360;echo ${#aaa};
+
 function all_file
 {
 	for file in ./beauty/*.txt
@@ -250,5 +253,7 @@ function script_return_code_test()
 	cat fdafda;
 	script_return_code;
 }
+
+
 
 
