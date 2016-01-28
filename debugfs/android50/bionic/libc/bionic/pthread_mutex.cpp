@@ -32,8 +32,6 @@
 #include <limits.h>
 #include <sys/mman.h>
 #include <unistd.h>
-#include <../../external/libunwind/include/libunwind.h>
-
 
 #include "pthread_internal.h"
 
@@ -307,144 +305,11 @@ int pthread_mutex_init(pthread_mutex_t* mutex, const pthread_mutexattr_t* attr) 
  * "type" value is zero, so the only bits that will be set are the ones in
  * the lock state field.
  */
-
-extern "C"
-{
-#define MUTEX_BACKTACE_COUNT 32
-
-	static pid_t mutex_debug_pid = -1;
-	static pid_t dump_tid = -1;
-	
-	struct mutex_backtrace
-	{
-		long unsigned backtrace[MUTEX_BACKTACE_COUNT];
-		unsigned long long lock_time_sec;
-		pthread_mutex_t* mutex;
-	};
-	static mutex_backtrace mutex_locked_mutex_debug[1024]={{{0},0,0}} ;
-	static pthread_mutex_t mutex_self = PTHREAD_MUTEX_INITIALIZER;
-
-	int unwind_backtrace(unsigned long backtrace[],int count)
-	{
-		unw_word_t ip, sp;
-		int i = 0;
-		unw_cursor_t *cursor = (unw_cursor_t*)malloc(sizeof(unw_cursor_t));
-		if(cursor == NULL)
-		{
-			return -1;
-		}
-		unw_context_t *uc = (unw_context_t*)malloc(sizeof(unw_context_t));
-		if(uc == NULL)
-		{
-			free(cursor);
-			return -1;
-		}
-		memset(cursor,0,sizeof(unw_cursor_t));
-		memset(uc,0,sizeof(unw_context_t));
-
-		unw_getcontext(uc);
-		unw_init_local(cursor, uc);
-		for( i = 0 ; i < count ; i++)
-		{
-			if(unw_step(cursor) > 0) 
-			{
-				unw_get_reg(cursor, UNW_REG_IP, &ip);
-				unw_get_reg(cursor, UNW_REG_SP, &sp);
-				backtrace[i] = ip;
-				//printf ("ip = %lx, sp = %lx\n", (long) ip, (long) sp);	
-			}
-			else
-			{
-				break; 
-			}
-		}
-		if(i<MUTEX_BACKTACE_COUNT)
-		{
-			backtrace[i] = 0;
-		}
-		
-		free(cursor);
-		free(uc);
-		return 0;
-	}
-	int is_gm_mutex(void *mutex);
-	int is_findfp_mutex(void *mutex);
-	int is_pthread_key_lock(pthread_mutex_t *mutex);
-	int ignore_mutex(pthread_mutex_t* mutex)
-	{
-		return is_gm_mutex(mutex)||is_findfp_mutex(mutex)||dump_tid==gettid()
-			||&mutex_self==mutex||is_pthread_key_lock(mutex);
-	}
-
-	void set_mutex_dump_tid(pid_t tid)
-	{
-		dump_tid = tid;
-	}
-
-	static pthread_key_t mutex_key = -1;
-	void debug_mutex_lock(pthread_mutex_t* mutex)
-	{
-		int i = 0;
-		if(ignore_mutex(mutex))
-		{
-			return;
-		}
-		if(mutex_key == -1)
-		{
-			pthread_key_create(&mutex_key,NULL);
-		}
-		if(pthread_getspecific(mutex_key) == (void*)1)
-		{
-			return;
-		}
-		pthread_setspecific(mutex_key,(void*)1);
-		pthread_mutex_lock(&mutex_self);
-		for(i = 0 ; i < 1024;i++)
-		{
-			if(mutex_locked_mutex_debug[i].mutex== 0)
-			{
-				mutex_locked_mutex_debug[i].mutex = mutex;
-				mutex_locked_mutex_debug[i].lock_time_sec = time(NULL);
-				break;
-			}
-		}
-		pthread_mutex_unlock(&mutex_self);
-		if(i < 1024)
-		{
-			unwind_backtrace(mutex_locked_mutex_debug[i].backtrace,2);
-		}
-		pthread_setspecific(mutex_key,(void*)0);
-		
-	}
-
-	void debug_mutex_unlock(pthread_mutex_t* mutex)
-	{
-		int i = 0;
-		if(ignore_mutex(mutex))
-		{
-			return;
-		}
-		for(i = 0 ; i < 1024;i++)
-		{
-			if(mutex_locked_mutex_debug[i].mutex == mutex)
-			{
-				mutex_locked_mutex_debug[i].mutex = NULL;
-				break;
-			}
-		}
-	}
-
-	void set_mutex_debug_pid(pid_t pid)
-	{
-		mutex_debug_pid = pid;
-	}
-
-	struct mutex_backtrace* get_mutex_locked_mutex_debug()
-	{
-		return mutex_locked_mutex_debug; 
-	}
-}
-
+#if 1 //wgz add
+void (*mutex_lock_debug)(pthread_mutex_t* mutex, int shared) = 0;
+void (*mutex_unlock_debug)(pthread_mutex_t* mutex, int shared) = 0;
+void (*mutex_destroy_debug)(pthread_mutex_t* mutex) = 0;
+#endif
 
 static inline void _normal_lock(pthread_mutex_t* mutex, int shared) {
     /* convenience shortcuts */
@@ -478,10 +343,12 @@ static inline void _normal_lock(pthread_mutex_t* mutex, int shared) {
             __futex_wait_ex(&mutex->value, shared, locked_contended, NULL);
         }
     }
-	if(mutex_debug_pid != -1 && mutex_debug_pid == getpid())
+#if 1 //wgz add
+	if(mutex_lock_debug != 0)
 	{
-		debug_mutex_lock(mutex);
+		mutex_lock_debug(mutex,shared);
 	}
+#endif
     ANDROID_MEMBAR_FULL();
 }
 
@@ -490,12 +357,13 @@ static inline void _normal_lock(pthread_mutex_t* mutex, int shared) {
  * that we are in fact the owner of this lock.
  */
 static inline void _normal_unlock(pthread_mutex_t* mutex, int shared) {
-
-	if(mutex_debug_pid != -1 && mutex_debug_pid == getpid())
+#if 1 //wgz add
+	if(mutex_unlock_debug != 0)
 	{
-		debug_mutex_unlock(mutex);
+		mutex_unlock_debug(mutex,shared);
 	}
-	
+#endif
+
     ANDROID_MEMBAR_FULL();
 
     /*
@@ -901,9 +769,11 @@ int pthread_mutex_destroy(pthread_mutex_t* mutex) {
     return error;
   }
   mutex->value = 0xdead10cc;
-	if(mutex_debug_pid != -1 && mutex_debug_pid == getpid())
+#if 1 //wgz add
+	if(mutex_destroy_debug != 0)
 	{
-		debug_mutex_unlock(mutex);
+		mutex_destroy_debug(mutex);
 	}
+#endif
   return 0;
 }

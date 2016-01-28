@@ -3097,6 +3097,7 @@ static void post_fork_parent(void) { RELEASE_LOCK(&(gm)->mutex); }
 static void post_fork_child(void)  { INITIAL_LOCK(&(gm)->mutex); }
 #endif /* LOCK_AT_FORK */
 
+#if 1 //wgz add
 #if !ONLY_MSPACES
 int is_malloc_gm_mutex(void *mutex)
 {
@@ -3110,8 +3111,7 @@ int is_malloc_global_mutex(void *mutex)
 	return mutex == &malloc_global_mutex;
 }
 #endif
-#if !ONLY_MSPACES||!USE_LOCKS
-int is_gm_mutex(void *mutex)
+int is_gm_mutex2(void *mutex)
 {
 	int ret = 0;
 #if !ONLY_MSPACES
@@ -3123,8 +3123,6 @@ int is_gm_mutex(void *mutex)
 	return ret;
 }
 #endif
-
-
 /* Initialize mparams */
 static int init_mparams(void) {
   /* BEGIN android-added: move pthread_atfork outside of lock */

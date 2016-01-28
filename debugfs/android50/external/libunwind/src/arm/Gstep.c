@@ -200,48 +200,10 @@ unw_handle_signal_frame (unw_cursor_t *cursor)
   return 1;
 }
 
-static int last_format = 0;
-static int step_dwarf(struct cursor *c)
-{
-	int ret = -UNW_EUNSPEC;
-	if (UNW_TRY_METHOD(UNW_ARM_METHOD_DWARF))
-    {
-      ret = dwarf_step (&c->dwarf);
-      Debug(1, "dwarf_step()=%d\n", ret);
-
-      if (likely (ret > 0))
-      	{
-        	ret = 1;
-			last_format = UNW_ARM_METHOD_DWARF;
-      	}
-      else if (unlikely (ret == -UNW_ESTOPUNWIND))
-        ret = 0;
-    }
-	return ret;
-}
-
-static int step_exidx(struct cursor *c)
-{
-	int ret = -UNW_EUNSPEC;
-	if (UNW_TRY_METHOD (UNW_ARM_METHOD_EXIDX))
-    {
-      ret = arm_exidx_step (c);
-      if (ret > 0)
-      	{
-			ret = 1;
-			last_format = UNW_ARM_METHOD_EXIDX;
-      	}
-      if (ret == -UNW_ESTOPUNWIND || ret == 0)
-			ret = 0;
-    }
-	return ret;
-}
-
-
 PROTECTED int
 unw_step (unw_cursor_t *cursor)
 {
-  
+  unwi_unwind_method = UNW_ARM_METHOD_EXIDX | UNW_ARM_METHOD_LR;
   struct cursor *c = (struct cursor *) cursor;
   int ret = -UNW_EUNSPEC;
 
@@ -253,26 +215,29 @@ unw_step (unw_cursor_t *cursor)
       ret = unw_handle_signal_frame (cursor);
     }
 
+#ifdef CONFIG_DEBUG_FRAME
   /* First, try DWARF-based unwinding. */
-	if (ret < 0)
-	{
-		if(last_format == UNW_ARM_METHOD_DWARF)
-		{
-			ret = step_dwarf(c);
-			if(ret < 0)
-			{
-				ret = step_exidx(c);
-			}
-		}
-		else
-		{
-			ret = step_exidx(c);
-			if(ret < 0)
-			{
-				ret = step_dwarf(c);
-			}
-		}
-	}
+  if (ret < 0 && UNW_TRY_METHOD(UNW_ARM_METHOD_DWARF))
+    {
+      ret = dwarf_step (&c->dwarf);
+      Debug(1, "dwarf_step()=%d\n", ret);
+
+      if (likely (ret > 0))
+        ret = 1;
+      else if (unlikely (ret == -UNW_ESTOPUNWIND))
+        ret = 0;
+    }
+#endif /* CONFIG_DEBUG_FRAME */
+
+  /* Next, try extbl-based unwinding. */
+  if (ret < 0 && UNW_TRY_METHOD (UNW_ARM_METHOD_EXIDX))
+    {
+      ret = arm_exidx_step (c);
+      if (ret > 0)
+	ret = 1;
+      if (ret == -UNW_ESTOPUNWIND || ret == 0)
+	ret = 0;
+    }
 
   /* Fall back on APCS frame parsing.
      Note: This won't work in case the ARM EABI is used. */

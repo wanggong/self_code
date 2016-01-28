@@ -3,17 +3,44 @@
 LOCAL_PATH := $(call my-dir)
 include $(CLEAR_VARS)
 
-libbacktrace_libc++_c_includes := \
-	external/libunwind/include \
+includes := \
+    bionic \
+    external/stlport/stlport \
+
+LOCAL_C_INCLUDES += $(includes)
 
 LOCAL_32_BIT_ONLY := true
 
-LOCAL_SRC_FILES := unwind.cpp
+LOCAL_SRC_FILES := mutexdebug.cpp 
 
-LOCAL_SHARED_LIBRARIES := libcutils libutils libc
+LOCAL_SHARED_LIBRARIES := libcutils libutils libc libdl libstlport libstdc++ libunwind libbacktrace_libc++
 
-LOCAL_MODULE := unwind
+LOCAL_MODULE := libmutexdebug
 
-LOCAL_CFLAGS := -Werror 
+LOCAL_CFLAGS := -Werror -ggdb
+
+#include $(BUILD_EXECUTABLE)
+include $(BUILD_SHARED_LIBRARY)
+
+include $(CLEAR_VARS)
+
+includes := \
+    bionic \
+    external/stlport/stlport \
+
+LOCAL_C_INCLUDES += $(includes)
+
+LOCAL_32_BIT_ONLY := true
+
+LOCAL_SRC_FILES := mutex_debug_test.cpp
+
+LOCAL_SHARED_LIBRARIES := libcutils libutils libc libdl libstlport libstdc++ libunwind libbacktrace_libc++ libmutexdebug
+
+LOCAL_MODULE := mutex_debug_test
+
+LOCAL_CFLAGS := -Werror -ggdb
 
 include $(BUILD_EXECUTABLE)
+#include $(BUILD_SHARED_LIBRARY)
+
+

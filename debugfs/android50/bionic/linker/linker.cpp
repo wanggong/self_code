@@ -419,7 +419,6 @@ int dl_iterate_phdr(int (*cb)(dl_phdr_info* info, size_t size, void* data), void
  	 }
   }
 #endif
-  
   for (soinfo* si = solist; si != nullptr; si = si->next) {
     dl_phdr_info dl_info;
     dl_info.dlpi_addr = si->link_map_head.l_addr;
@@ -433,6 +432,19 @@ int dl_iterate_phdr(int (*cb)(dl_phdr_info* info, size_t size, void* data), void
   }
   return rv;
 }
+
+#if 1 //wgz add
+int dl_iterate_phdr_unwind(int (*cb)(struct dl_phdr_info* info, size_t size, void* data) __unused, void* data __unused)
+{
+	PRINT("dl_iterate_phdr_unwind enter");
+	if(data != 0)
+	{
+		*(int*)data = 1234;
+	}
+	return 0; 
+}
+#endif
+
 
 static ElfW(Sym)* soinfo_elf_lookup(soinfo* si, unsigned hash, const char* name) {
   ElfW(Sym)* symtab = si->symtab;
