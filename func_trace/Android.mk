@@ -11,6 +11,7 @@ LOCAL_CFLAGS := \
   -DCOMIP_CAMERA_BIONIC
 
 LOCAL_CFLAGS  += -D_ANDROID_
+LOCAL_CFLAGS  += -finstrument-functions
 
 #ifneq ($(call is-platform-sdk-version-at-least,17),true)
 #  LOCAL_CFLAGS += -include bionic/libc/kernel/common/linux/types.h

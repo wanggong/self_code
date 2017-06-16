@@ -1,0 +1,57 @@
+f71c0000-f7240000 rw-p 00000000 00:00 0                                  [anon:libc_malloc]
+f7252000-f7253000 rw-p 00000000 00:00 0                                  [anon:linker_alloc]
+f7253000-f7257000 r-xp 00000000 103:0b 1165                              /system/lib/libnetd_client.so
+f7257000-f7258000 r--p 00003000 103:0b 1165                              /system/lib/libnetd_client.so
+f7258000-f7259000 rw-p 00004000 103:0b 1165                              /system/lib/libnetd_client.so
+f7259000-f7279000 r--s 00000000 00:0d 10512                              /dev/__properties__
+f7279000-f727a000 rw-p 00000000 00:00 0                                  [anon:linker_alloc_vector]
+f727a000-f7282000 r-xp 00000000 103:0b 1147                              /system/lib/liblog.so
+f7282000-f7283000 r--p 00007000 103:0b 1147                              /system/lib/liblog.so
+f7283000-f7284000 rw-p 00008000 103:0b 1147                              /system/lib/liblog.so
+f7284000-f72a3000 r-xp 00000000 103:0b 1148                              /system/lib/libm.so
+f72a3000-f72a4000 ---p 00000000 00:00 0 
+f72a4000-f72a5000 r--p 0001f000 103:0b 1148                              /system/lib/libm.so
+f72a5000-f72a6000 rw-p 00020000 103:0b 1148                              /system/lib/libm.so
+f72a6000-f7319000 r-xp 00000000 103:0b 1076                              /system/lib/libc.so
+f7319000-f731d000 r--p 00072000 103:0b 1076                              /system/lib/libc.so
+f731d000-f7320000 rw-p 00076000 103:0b 1076                              /system/lib/libc.so
+f7320000-f732a000 rw-p 00000000 00:00 0 
+f732a000-f73b2000 r-xp 00000000 103:0b 1075                              /system/lib/libc++.so
+f73b2000-f73b3000 ---p 00000000 00:00 0 
+f73b3000-f73b7000 r--p 00088000 103:0b 1075                              /system/lib/libc++.so
+f73b7000-f73b8000 rw-p 0008c000 103:0b 1075                              /system/lib/libc++.so
+f73b8000-f73b9000 rw-p 00000000 00:00 0 
+f73b9000-f73d8000 r-xp 00000000 103:0b 1976                              /system/vendor/lib/libmmcamera3_sensor_modules.so
+f73d8000-f73d9000 ---p 00000000 00:00 0 
+f73d9000-f73da000 r--p 0001f000 103:0b 1976                              /system/vendor/lib/libmmcamera3_sensor_modules.so
+f73da000-f73db000 rw-p 00020000 103:0b 1976                              /system/vendor/lib/libmmcamera3_sensor_modules.so
+f73db000-f73ed000 r-xp 00000000 103:0b 2019                              /system/vendor/lib/libmmcamera3_isp_modules.so
+f73ed000-f73ee000 r--p 00011000 103:0b 2019                              /system/vendor/lib/libmmcamera3_isp_modules.so
+f73ee000-f73ef000 rw-p 00012000 103:0b 2019                              /system/vendor/lib/libmmcamera3_isp_modules.so
+f73ef000-f7400000 r-xp 00000000 103:0b 1978                              /system/vendor/lib/liboemcamera.so
+f7400000-f7401000 r--p 00010000 103:0b 1978                              /system/vendor/lib/liboemcamera.so
+f7401000-f7402000 rw-p 00011000 103:0b 1978                              /system/vendor/lib/liboemcamera.so
+f7402000-f7411000 r-xp 00000000 103:0b 1088                              /system/lib/libcutils.so
+f7411000-f7412000 r--p 0000e000 103:0b 1088                              /system/lib/libcutils.so
+f7412000-f7413000 rw-p 0000f000 103:0b 1088                              /system/lib/libcutils.so
+f7413000-f7414000 rw-p 00000000 00:00 0                                  [anon:linker_alloc_vector]
+f7414000-f7415000 r--p 00000000 00:00 0 
+f7415000-f7417000 rw-p 00000000 00:00 0                                  [anon:linker_alloc]
+f7417000-f7418000 rw-p 00000000 00:00 0                                  [anon:linker_alloc_vector]
+f7418000-f7419000 rw-p 00000000 00:00 0                                  [anon:linker_alloc_32]
+f7419000-f741a000 rw-p 00000000 00:00 0                                  [anon:linker_alloc_vector]
+f741a000-f741b000 rw-p 00000000 00:00 0                                  [anon:linker_alloc_64]
+f741b000-f741c000 rw-p 00000000 00:00 0                                  [anon:linker_alloc]
+f741c000-f743c000 r--s 00000000 00:0d 10512                              /dev/__properties__
+f743c000-f743d000 r--p 00000000 00:00 0 
+f743d000-f743e000 ---p 00000000 00:00 0 
+f743e000-f7440000 rw-p 00000000 00:00 0                                  [anon:thread signal stack]
+f7440000-f745d000 r-xp 00000000 103:0b 323                               /system/bin/linker
+f745d000-f745e000 r--p 0001c000 103:0b 323                               /system/bin/linker
+f745e000-f7460000 rw-p 0001d000 103:0b 323                               /system/bin/linker
+f7460000-f7462000 rw-p 00000000 00:00 0 
+f7462000-f7467000 r-xp 00000000 103:0b 353                               /system/bin/mm-comipcamera-daemon
+f7467000-f7468000 r--p 00004000 103:0b 353                               /system/bin/mm-comipcamera-daemon
+f7468000-f7469000 rw-p 00005000 103:0b 353                               /system/bin/mm-comipcamera-daemon
+ff970000-ff991000 rw-p 00000000 00:00 0                                  [stack]
+ffff0000-ffff1000 r-xp 00000000 00:00 0                                  [vectors]
