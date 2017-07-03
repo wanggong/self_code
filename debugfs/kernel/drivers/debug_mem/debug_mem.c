@@ -1155,7 +1155,57 @@ static void init_thread_debug_fs(void)
 #endif
 /**************************************************************************************/
 
-/********************************BreakPoint**********************************************/
+/********************************BreakPoint**********************************************
+可以不用这么麻烦，参考代码samples/hw_breakpoint/data_breakpoint.c
+只是要在watchpoint_handler函数中稍作修改即可，见kernel4.8.6的
+arch/arm64/kernel/hw_breakpint.c watchpoint_handler函数中的注释
+
+
+#include <linux/perf_event.h>
+#include <linux/hw_breakpoint.h>
+static long watch = 0;
+static void sample_hbp_handler(struct perf_event *bp,
+			       struct perf_sample_data *data,
+			       struct pt_regs *regs)
+{
+	printk( "wgz watch value is changed %ld\n" , watch);
+//	dump_stack();
+//	printk( "wgz Dump stack from sample_hbp_handler\n");
+}
+struct perf_event * __percpu *sample_hbp;
+static int hw_break_init(void)
+{
+	int ret;
+	struct perf_event_attr attr;
+
+	hw_breakpoint_init(&attr);
+	attr.bp_addr = (__u64)&watch;
+	attr.bp_len = HW_BREAKPOINT_LEN_8;
+	attr.bp_type = HW_BREAKPOINT_W ;
+
+	sample_hbp = register_wide_hw_breakpoint(&attr, sample_hbp_handler, NULL);
+	if (IS_ERR((void __force *)sample_hbp)) {
+		ret = PTR_ERR((void __force *)sample_hbp);
+		goto fail;
+	}
+
+	printk( "wgz HW Breakpoint for watch write installed\n");
+
+	return 0;
+
+fail:
+	printk( "wgz Breakpoint registration failed\n");
+
+	return ret;
+}
+
+static void hw_break_exit(void)
+{
+	unregister_wide_hw_breakpoint(sample_hbp);
+	printk( "wgz HW Breakpoint for watch write uninstalled\n");
+}
+
+*************************************************************************/
 #define DEBUG_BREAKPOINT
 #ifdef DEBUG_BREAKPOINT
 static void breakpoint_work_func(struct work_struct *work);
