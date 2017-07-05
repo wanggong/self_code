@@ -716,10 +716,11 @@ static int watchpoint_handler(unsigned long addr, unsigned int esr,
 unlock:
 		rcu_read_unlock();
 	}
-
+//wgz modify
+#if 1
 	if (!step)
-		return 0;
-
+		;//return 0;
+#endif
 	/*
 	 * We always disable EL0 watchpoints because the kernel can
 	 * cause these to fire via an unprivileged access.
@@ -755,6 +756,19 @@ unlock:
 	return 0;
 }
 
+//wgz add
+#if 1
+void send_userdefine_signal(struct pt_regs *regs)
+{
+	siginfo_t info = {
+		.si_signo	= SIGUSR1,  //use SIGUSR1
+		.si_errno	= 0,
+		.si_code	= TRAP_HWBKPT,
+		.si_addr	= (void __user *)(regs->pc-4),
+	};
+       force_sig_info(SIGUSR1, &info, current);
+}
+#endif
 /*
  * Handle single-step exception.
  */
@@ -778,6 +792,10 @@ int reinstall_suspended_bps(struct pt_regs *regs)
 		}
 
 		if (debug_info->wps_disabled) {
+//wgz add
+#if 1
+			send_userdefine_signal(regs);
+#endif
 			debug_info->wps_disabled = 0;
 			toggle_bp_registers(AARCH64_DBG_REG_WCR, DBG_ACTIVE_EL0, 1);
 			handled_exception = 1;
