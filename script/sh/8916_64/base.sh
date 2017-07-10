@@ -1,3 +1,4 @@
+#!/system/bin/sh
 base_path="/d/debug_wgz/";
 memory_path=$base_path"/memory/"
 vir_value_path=$memory_path"/vir_value";
