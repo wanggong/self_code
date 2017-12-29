@@ -168,7 +168,7 @@ void yuv2rgb(unsigned char *yuv_buffer, unsigned char *rgb_buffer,int width , in
 }
 //yuv2bmp yuv_name [width] [height] [mirror]
 //mirror 1 for LR 2 for UB ,3 for LR and UB
-int main(char argc , char **argv)
+int main(int argc , char **argv)
 {
 	FILE *file_bmp;
 	FILE *file_yuv;
@@ -177,11 +177,13 @@ int main(char argc , char **argv)
 	char yuv_file_name[256]={0};
 	char bmp_file_name[256]={0};
 	int mirror = 0;
+	int y_only = 0;
 	if(argc < 2)
 	{
-		printf("Useage: yuv2bmp yuv_name [width] [height] [mirror]\n");
+		printf("Useage: yuv2bmp yuv_name [width] [height] [mirror] [y_only]\n");
 		printf("yuv_name : short file name \n");
 		printf("mirror : 1 for left right mirror , 2 for up bottom mirror,3 for LR and UB\n");
+		printf("y_only : only have Y \n");
 		return 0;
 	}
 	else
@@ -198,6 +200,10 @@ int main(char argc , char **argv)
 	if(argc >= 5)
 	{
 		mirror = atoi(argv[4]);
+	}
+	if(argc >= 6)
+	{
+		y_only = atoi(argv[5]);
 	}
 
 	
@@ -220,6 +226,7 @@ int main(char argc , char **argv)
 		perror("alloc yuv buffer failed:");
 		return -1;
 	}
+	memset(yuv_buffer , 128 , yuv_size);
 	int rgb_size=width*height*3;
 	unsigned char *rgb_buffer = (unsigned char*)malloc(rgb_size);
 	if(rgb_buffer == 0)
@@ -227,8 +234,9 @@ int main(char argc , char **argv)
 		perror("alloc rgb buffer failed:");
 		return -1;
 	}
-	int read_size = fread(yuv_buffer,1,yuv_size,file_yuv);
-	if(read_size != yuv_size)
+	int file_size = y_only ? width*height : yuv_size;
+	int read_size = fread(yuv_buffer,1,file_size,file_yuv);
+	if(read_size != file_size)
 	{
 		perror("read file error:");
 		return -1;
