@@ -20,14 +20,14 @@
 #include <sys/uio.h>
 #include <sys/user.h>
 #include <unistd.h>
-#include <utils/Log.h>
+//#include <utils/Log.h>
 #include <linux/ptrace.h>
 #include <string.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <linux/hw_breakpoint.h>
-#include <backtrace/Backtrace.h>
-#include <utils/CallStack.h>
+//#include <backtrace/Backtrace.h>
+//#include <utils/CallStack.h>
 #include <unistd.h>
 #include <pthread.h>
 #include <stdlib.h>
@@ -122,7 +122,7 @@ private:
         signal_number = signal_number;
         info = info;
         printf("tid:%d ,sno:%d , pc:%p" , gettid() , info->si_signo,info->si_addr);
-        android::CallStack s("wgz");    
+        //android::CallStack s("wgz");    
     }
 
 private:

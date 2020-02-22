@@ -11,6 +11,8 @@
 #include <linux/perf_event.h>
 #include <linux/hw_breakpoint.h>
 #include <asm/uaccess.h>
+#include <linux/uaccess.h>
+
 
 
 
@@ -19,7 +21,8 @@
 
 struct bp_list {
     struct list_head list;
-    struct perf_event *bp;
+    struct perf_event * __percpu *bp;
+    struct perf_event_attr attr;
 };
 
 static int bp_dev_open(struct inode *inode, struct file *file)
@@ -39,7 +42,7 @@ static int bp_dev_release(struct inode *inode, struct file *file)
     struct list_head *list = (struct list_head*)file->private_data;
     while(!list_empty(list)){
         struct bp_list *bp_l = (struct bp_list*)list->next;
-        unregister_hw_breakpoint(bp_l->bp);
+        unregister_wide_hw_breakpoint(bp_l->bp);
         list_del(&bp_l->list);
         kfree(bp_l);
     }
@@ -50,7 +53,7 @@ static int bp_dev_release(struct inode *inode, struct file *file)
 
 static int create_bp(struct file *file , struct perf_event_attr *user_attr)
 {
-    struct perf_event *bp;
+    struct perf_event * __percpu *bp;
     struct perf_event_attr attr;
     struct bp_list *bp_l;
     struct list_head *list = file->private_data;
@@ -60,7 +63,7 @@ static int create_bp(struct file *file , struct perf_event_attr *user_attr)
     attr.bp_len = user_attr->bp_len;
     attr.bp_type = user_attr->bp_type;
     attr.disabled = 0;
-    bp = register_user_hw_breakpoint(&attr, NULL, NULL, current);
+    bp = register_wide_hw_breakpoint(&attr, NULL, NULL);
     if (IS_ERR(bp)){
         pr_err("create breakpoint error\n");
         return -1;
@@ -68,10 +71,11 @@ static int create_bp(struct file *file , struct perf_event_attr *user_attr)
     bp_l = (struct bp_list*)kmalloc(sizeof(struct bp_list) , GFP_KERNEL);
     if(!bp_l){
         pr_err("kmalloc bp_list failed \n");
-        unregister_hw_breakpoint(bp);
+        unregister_wide_hw_breakpoint(bp);
         return -ENOMEM;
     }
     bp_l->bp = bp;
+    bp_l->attr = attr;
     list_add(&bp_l->list , list);
     return 0;
 }
@@ -82,13 +86,13 @@ static void del_bp(struct file *file , struct perf_event_attr *user_attr)
     struct bp_list *bp_l = NULL;
     int find = 0;
     list_for_each_entry(bp_l, head , list){
-        if(bp_l->bp->attr.bp_addr == user_attr->bp_addr){
+        if(bp_l->attr.bp_addr == user_attr->bp_addr){
             find = 1;
             break;
         }
     }
     if(find) {
-        unregister_hw_breakpoint(bp_l->bp);
+        unregister_wide_hw_breakpoint(bp_l->bp);
         list_del(&bp_l->list);
         kfree(bp_l);
     }
